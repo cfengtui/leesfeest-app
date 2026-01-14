@@ -3,6 +3,9 @@ import { useNavigate, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { UserPlus } from 'lucide-react'
 
+// Use environment variable for API base URL, fallback to relative URL for production
+const API_BASE = import.meta.env.VITE_API_URL || '';
+
 const Register = () => {
     const navigate = useNavigate()
     const [formData, setFormData] = useState({
@@ -20,7 +23,7 @@ const Register = () => {
     const handleSubmit = async (e) => {
         e.preventDefault()
         try {
-            const response = await fetch('http://localhost:8000/auth/register', {
+            const response = await fetch(`${API_BASE}/auth/register`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(formData)

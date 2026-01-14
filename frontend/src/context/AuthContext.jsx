@@ -2,6 +2,11 @@ import React, { createContext, useState, useEffect, useContext } from 'react';
 
 const AuthContext = createContext(null);
 
+// Use environment variable for API base URL, fallback to relative URL for production
+// When running with Vite locally, VITE_API_URL can be set to http://localhost:8000
+// In production, use relative URLs since frontend may be served from same origin
+const API_BASE = import.meta.env.VITE_API_URL || '';
+
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [token, setToken] = useState(localStorage.getItem('dmt_token'));
@@ -13,7 +18,7 @@ export const AuthProvider = ({ children }) => {
         formData.append('password', password);
 
         try {
-            const response = await fetch('http://localhost:8000/token', {
+            const response = await fetch(`${API_BASE}/token`, {
                 method: 'POST',
                 body: formData,
             });
@@ -41,7 +46,7 @@ export const AuthProvider = ({ children }) => {
 
     const fetchUser = async (accessToken) => {
         try {
-            const response = await fetch('http://localhost:8000/users/me', {
+            const response = await fetch(`${API_BASE}/users/me`, {
                 headers: {
                     'Authorization': `Bearer ${accessToken}`
                 }

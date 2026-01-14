@@ -7,9 +7,12 @@ const StudentDashboard = () => {
     const [history, setHistory] = React.useState([])
     const { user, logout } = useAuth()
 
+    // Use environment variable for API base URL, fallback to relative URL for production
+    const API_BASE = import.meta.env.VITE_API_URL || '';
+
     React.useEffect(() => {
         if (user) {
-            fetch('http://localhost:8000/session/me', {
+            fetch(`${API_BASE}/session/me`, {
                 headers: { 'Authorization': `Bearer ${localStorage.getItem('dmt_token')}` }
             })
                 .then(r => r.json())

@@ -33,7 +33,9 @@
         const { useState, useEffect, useRef } = React;
 
         // --- AUTH API HELPERS ---
-        const API_BASE = "http://localhost:8000";
+        // Use empty string for API_BASE since frontend is served from the same origin as the backend
+        // This ensures API calls work both locally and in production (Render deployment)
+        const API_BASE = "";
 
         async function login(email, password) {
             const formData = new FormData();

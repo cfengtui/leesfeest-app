@@ -3,6 +3,9 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Timer, Mic, Square } from 'lucide-react'
 import confetti from 'canvas-confetti'
 
+// Use environment variable for API base URL, fallback to relative URL for production
+const API_BASE = import.meta.env.VITE_API_URL || '';
+
 const CARD_DURATION = 60 // seconds
 
 // Mock data - In real app, fetch from backend based on card ID
@@ -99,7 +102,7 @@ const DMTTest = () => {
     const saveResults = async (finalResults) => {
         const totalScore = Object.values(finalResults).reduce((a, b) => a + b, 0)
         try {
-            await fetch('http://localhost:8000/session/', {
+            await fetch(`${API_BASE}/session/`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
