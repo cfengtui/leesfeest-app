@@ -1,0 +1,1365 @@
+<!DOCTYPE html>
+<html lang="nl">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leesfeest - Technisch Lezen & Spelling</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: { light: '#FFD166', DEFAULT: '#06D6A0', dark: '#118AB2', accent: '#EF476F' }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- React & Babel -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Confetti -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.0/dist/confetti.browser.min.js"></script>
+</head>
+
+<body class="bg-slate-50 text-slate-800">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // --- AUTH API HELPERS ---
+        const API_BASE = "http://localhost:8000";
+
+        async function login(email, password) {
+            const formData = new FormData();
+            formData.append('username', email);
+            formData.append('password', password);
+            const res = await fetch(`${API_BASE}/token`, { method: 'POST', body: formData });
+            if (!res.ok) throw new Error("Login failed");
+            const data = await res.json();
+            localStorage.setItem('dmt_token', data.access_token);
+            return data.access_token;
+        }
+
+        async function register(name, email, password, group) {
+            const res = await fetch(`${API_BASE}/register`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, email, password, school_group: parseInt(group), role: "student" })
+            });
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(err.detail || "Registration failed");
+            }
+            return await res.json();
+        }
+
+        async function getMe() {
+            const token = localStorage.getItem('dmt_token');
+            if (!token) return null;
+            const res = await fetch(`${API_BASE}/users/me`, { headers: { 'Authorization': `Bearer ${token}` } });
+            if (res.ok) return await res.json();
+            return null;
+        }
+
+        async function saveSession(results) {
+            const token = localStorage.getItem('dmt_token');
+            const totalScore = Object.values(results).reduce((a, b) => a + (b.score || 0), 0);
+            await fetch(`${API_BASE}/session/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({
+                    user_id: 0,
+                    total_words: 100,
+                    correct_words: totalScore,
+                    duration_seconds: 180,
+                    wpm: Math.round(totalScore / 3),
+                    accuracy: 100,
+                    words_presented: [],
+                    words_read: []
+                })
+            });
+        }
+
+        async function getHistory() {
+            const token = localStorage.getItem('dmt_token');
+            const res = await fetch(`${API_BASE}/session/me`, { headers: { 'Authorization': `Bearer ${token}` } });
+            return res.ok ? await res.json() : [];
+        }
+
+        // --- HELPERS ---
+        // Global word pools loaded from dmt_tests.json
+        let WORD_POOLS = { 1: [], 2: [], 3: [] };
+        let poolsLoaded = false;
+
+        // =====================================================
+        // WORD CLASSIFICATION RULES:
+        // Level 1 (Kaart 1): Under 4 characters (simple phonetic)
+        // Level 2 (Kaart 2): 4+ characters (regular words)
+        // Level 3 (Kaart 3): Compound words ONLY (samengestelde woorden)
+        // =====================================================
+
+        // Compound words for level 3 (MUST be 8+ characters)
+        const COMPOUND_WORDS = [
+            "gewichtcontrole", "afstandsbediening", "tandenborstel", "puntenslijper", "schrijfmachine",
+            "boodschappentas", "stofzuigerzak", "huishoudhulp", "schakelknoppen", "sprookjesboek",
+            "hoofdkantoor", "schoolplein", "voetbalveld", "zwembadwater", "straatlantaarn",
+            "speelplaats", "winterjassen", "fietsenmaker", "regendruppels", "vlinderdas",
+            "ochtendjas", "middagmaal", "nachtkastje", "bureaulamp", "wandelschoenen",
+            "telefoonboek", "krantenbezorger", "muziekinstrument", "sportschool", "boterhamzakje",
+            "koptelefoon", "waterfles", "huisdieren", "bloembollen", "appelboom",
+            "handschoen", "broodrooster", "slaapkamer", "woonkamer", "kinderkamer",
+            "zonnebril", "winterjas", "regenjas", "schooltas", "voetbalschoenen",
+            "tennisbal", "zwembroek", "handdoek", "tandpasta", "haarborstel",
+            "zeepbakje", "washandje", "badschuim", "ontbijtkoek", "pindakaas",
+            "hagelslag", "appelstroop", "sinaasappelsap", "appelmoes", "aardappelpuree",
+            "groenteman", "slagerij", "bakkerij", "supermarkt", "boekenwinkel",
+            "speelgoedwinkel", "kledingwinkel", "huiswerk", "schoolboek", "schrijfschrift",
+            "potloodslijper", "tekenboek", "kleurpotlood", "viltstift", "schetsboek",
+            "verjaardagsfeest", "verjaardagstaart", "cadeaupapier", "verjaardagskaart", "slingers",
+            "kerstboom", "sinterklaas", "pepernoten", "chocoladeletter", "pakjesavond",
+            "paashaas", "lentebloemen", "zomervakantie", "herfstbladeren", "sneeuwpop",
+            "winterweer", "zonneschijn", "regenboog", "onweersbui", "brandweerman",
+            "politieagent", "ambulance", "ziekenauto", "brandweerauto", "basisschool",
+            "middelbare", "universiteit", "bibliotheek", "gemeentehuis", "postkantoor",
+            "bankgebouw", "winkelcentrum", "parkeergarage", "bushalte", "treinstation",
+            "vliegveld", "fietsenrek", "voetganger", "verkeerslicht", "zebrapad",
+            "voetpad", "fietspad", "snelweg", "huisarts", "tandarts",
+            "dierenarts", "ziekenhuis", "apotheek", "medicijnen", "pleister",
+            "thermometer", "bloeddruk", "hartslagmeter", "weegschaal", "meetlint",
+            "stopwatch", "rekenmachine", "computer", "beeldscherm", "toetsenbord",
+            "computermuis", "printer", "kopieermachine", "telefoon", "smartphone",
+            "oplader", "batterij", "zaklamp", "wekkerradio", "televisie",
+            "dvdspeler", "wasmachine", "strijkijzer", "stofzuiger", "magnetron",
+            "waterkoker", "koffiemachine", "afwasmachine", "koelkast", "diepvriezer",
+            "afzuigkap", "wandelingen", "natuurlijk", "keukentafel", "alsjeblieft",
+            "vliegtuig", "vertellen", "misschien", "iedereen", "kinderen",
+            "oefeningen", "veranderen", "vergaderen", "ongelooflijk", "waarschijnlijk",
+            "verschillende", "langzamerhand", "onmiddellijk"
+        ];
+
+        // =====================================================
+        // REAL COMMON DUTCH WORDS - Curated from frequency lists
+        // Level 1: 2-4 chars | Level 2: 5-7 chars | Level 3: 8+
+        // =====================================================
+
+        // Level 1: Short common words (2-4 characters) - 500+ real Dutch words
+        const DUTCH_LEVEL1 = [
+            // Most common function words
+            "de", "het", "een", "en", "van", "ik", "je", "ze", "we", "op", "in", "te", "me", "dan", "nu", "zo", "ja", "nee", "of", "al",
+            "aan", "ook", "uit", "nog", "kan", "wel", "bij", "wie", "wat", "hoe", "dit", "dat", "doe", "zei", "hem", "hun", "hen", "ons",
+            // Common verbs (short forms)
+            "ben", "was", "had", "zal", "mag", "wil", "kan", "kom", "ga", "zie", "zit", "lig", "sta", "eet", "heb", "doe", "zeg", "geef",
+            "neem", "loop", "lees", "werk", "help", "kijk", "maak", "zoek", "weet", "vind", "hou", "woon", "speel", "leer", "denk",
+            // Common nouns (2-4 chars)
+            "man", "dag", "uur", "jaar", "kind", "huis", "stad", "land", "weg", "werk", "geld", "tijd", "naam", "hand", "oog", "oor",
+            "neus", "mond", "been", "arm", "voet", "hart", "kop", "hoofd", "haar", "tand", "lip", "nek", "rug", "buik", "huid", "bloed",
+            "bot", "spier", "long", "maag", "lever", "nier", "vat", "ader", "zenuw",
+            "zon", "maan", "ster", "lucht", "wolk", "wind", "regen", "sneeuw", "ijs", "vuur", "water", "zee", "meer", "rivier", "berg",
+            "bos", "boom", "tak", "blad", "bloem", "gras", "plant", "zaad", "wort", "steen", "zand", "aarde", "klei", "kalk", "ijzer",
+            "goud", "zilver", "koper", "lood", "tin", "glas", "hout", "stof", "wol", "katoen", "zijde", "leer", "papier", "inkt",
+            "krijt", "kool", "olie", "was", "zeep", "zout", "suiker", "meel", "brood", "melk", "boter", "kaas", "vlees", "vis", "ei",
+            "rijst", "kool", "uien", "bonen", "erwt", "noot", "fruit", "appel", "peer", "druif", "kers", "bes", "noot",
+            "koe", "paard", "varken", "schaap", "geit", "hond", "kat", "muis", "rat", "haas", "konijn", "hert", "beer", "wolf", "vos",
+            "leeuw", "tijger", "olifant", "aap", "vogel", "kip", "eend", "gans", "zwaan", "uil", "duif", "kraai", "merel", "mus",
+            "kikker", "pad", "slang", "vis", "haai", "walvis", "krab", "kreeft", "garnaal", "mossel", "vlieg", "mug", "bij", "wesp", "spin",
+            "worm", "rups", "vlinder", "kever", "mier", "luis",
+            "huis", "deur", "raam", "dak", "muur", "vloer", "trap", "gang", "kamer", "zaal", "keuken", "bad", "wc", "tuin", "hek", "poort",
+            "brug", "weg", "straat", "plein", "park", "bos", "veld", "weide", "akker",
+            "jas", "broek", "rok", "jurk", "hemd", "trui", "sok", "schoen", "laars", "hoed", "pet", "sjaal", "handschoen", "das", "riem",
+            "ring", "ketting", "armband", "oorbel", "horloge", "bril", "tas", "koffer", "rugzak", "mand", "emmer", "kan", "pot", "pan",
+            "bord", "kom", "kop", "glas", "mes", "vork", "lepel", "schaar", "kam", "borstel", "spiegel", "lamp", "kaars", "lucifer",
+            "sleutel", "slot", "ketting", "touw", "draad", "naald", "speld", "knoop",
+            "boek", "brief", "krant", "blad", "kaart", "foto", "film", "lied", "dans", "spel", "bal", "pop", "beer", "auto", "trein",
+            "boot", "schip", "vliegtuig", "fiets", "wagen", "kar", "slee", "paard", "ezel",
+            "school", "klas", "bank", "tafel", "stoel", "bed", "kast", "lade", "plank", "haak", "knop", "wiel", "as", "balk", "paal",
+            "buis", "pijp", "doos", "zak", "fles", "ton", "vat", "kist", "bak", "kuil", "gat", "gleuf", "spleet",
+            "god", "kerk", "kruis", "bid", "ziel", "geest", "engel", "duivel", "hemel", "hel",
+            "wet", "recht", "plicht", "straf", "boete", "cel", "gevang", "rechter", "advocaat", "politie", "leger", "soldaat", "wapen",
+            "zwaard", "speer", "pijl", "boog", "schild", "helm", "pantser",
+            "elf", "dwerg", "reus", "heks", "tovenaar", "fee", "geest", "spook", "draak", "monster",
+            "nu", "dan", "toen", "straks", "later", "ooit", "nooit", "altijd", "vaak", "soms", "zelden", "steeds", "reeds", "juist",
+            "net", "pas", "al", "nog", "eens", "weer", "ook", "maar", "dus", "toch", "wel", "echt", "goed", "fout", "waar", "echt",
+            "hier", "daar", "waar", "heen", "weg", "ver", "nabij", "dicht", "hoog", "laag", "diep", "vlak", "breed", "smal", "lang",
+            "kort", "groot", "klein", "dik", "dun", "zwaar", "licht", "hard", "zacht", "warm", "koud", "heet", "nat", "droog", "schoon",
+            "vuil", "mooi", "lelijk", "goed", "slecht", "oud", "nieuw", "jong", "rijk", "arm", "vol", "leeg", "open", "dicht",
+            "wit", "zwart", "rood", "blauw", "geel", "groen", "bruin", "grijs", "oranje", "paars", "roze", "goud", "zilver",
+            "ja", "nee", "ok", "hoi", "hallo", "dag", "tot", "ziens", "vaarwel", "dank", "sorry", "help", "stop", "stil", "kom", "ga",
+            "wacht", "kijk", "luister", "pak", "geef", "neem", "zet", "leg", "hang", "zit", "sta", "lig", "loop", "ren", "spring", "val",
+            "een", "twee", "drie", "vier", "vijf", "zes", "zeven", "acht", "negen", "tien", "elf", "twaalf", "honderd", "duizend",
+            "veel", "weinig", "meer", "minder", "meest", "minst", "alle", "elk", "ieder", "sommig", "enig", "beide", "half", "heel",
+            "ik", "jij", "hij", "zij", "wij", "jullie", "mij", "jou", "hem", "haar", "ons", "hen", "hun", "zich", "zelf", "wie", "wat",
+            "welk", "deze", "die", "dat", "dit", "zo", "zulk", "anders", "ander", "volgend", "vorig", "laatst", "eerst",
+            // Common adjectives
+            "blij", "boos", "bang", "moe", "ziek", "fit", "lui", "druk", "stil", "luid", "snel", "traag", "mooi", "lief", "stom", "dom",
+            "slim", "wijs", "gek", "mal", "raar", "ruw", "fijn", "grof", "schuin", "recht", "krom", "rond", "vierkant", "plat", "hol",
+            // Additional short verbs
+            "roep", "schreeuw", "fluister", "lach", "huil", "glimlach", "grijns", "wuif", "knik", "schud", "draai", "buig", "strek",
+            "duw", "trek", "gooi", "vang", "raak", "sla", "schop", "bijt", "krab", "streel", "wrijf", "poets", "veeg", "was", "droog",
+            "vouw", "knip", "naai", "brei", "weef", "spin", "rol", "win", "verlies", "spaar", "geef", "krijg", "ruil", "koop", "verkoop"
+        ];
+
+        // Level 2: Medium words (5-7 characters) - 500+ real Dutch words
+        const DUTCH_LEVEL2 = [
+            // Common verbs
+            "worden", "kunnen", "moeten", "willen", "zullen", "mogen", "laten", "geven", "nemen", "komen", "gaan", "staan", "zitten",
+            "liggen", "lopen", "rijden", "vliegen", "zwemmen", "klimmen", "springen", "vallen", "slapen", "dromen", "waken", "eten",
+            "drinken", "koken", "bakken", "braden", "stomen", "hakken", "snijden", "schillen", "roeren", "mengen", "gieten",
+            "werken", "rusten", "helpen", "dienen", "leiden", "volgen", "zoeken", "vinden", "krijgen", "houden", "laten", "brengen",
+            "halen", "dragen", "tillen", "duwen", "trekken", "gooien", "vangen", "raken", "slaan", "schoppen", "bijten",
+            "kijken", "zien", "horen", "luisteren", "ruiken", "proeven", "voelen", "raken", "tasten",
+            "denken", "weten", "kennen", "leren", "studeren", "lezen", "schrijven", "tekenen", "schilderen", "vormen", "maken",
+            "bouwen", "breken", "repareren", "veranderen", "verbeteren", "verslechteren",
+            "spreken", "praten", "zeggen", "vertellen", "vragen", "antwoorden", "roepen", "schreeuwen", "fluisteren", "zingen",
+            "lachen", "huilen", "glimlachen", "grijnzen", "wuiven", "knikken", "schudden", "draaien", "buigen", "strekken",
+            // Common nouns
+            "mensen", "vrouwen", "mannen", "jongens", "meisjes", "kinderen", "ouders", "vaders", "moeders", "broers", "zussen",
+            "familie", "vrienden", "buren", "collega", "baas", "werknemer", "klant", "gast", "bezoeker",
+            "woning", "gebouw", "kantoor", "fabriek", "winkel", "school", "ziekenhuis", "station", "haven", "vliegveld",
+            "straat", "plein", "markt", "park", "bos", "berg", "dal", "rivier", "meer", "zee", "eiland", "kust", "strand",
+            "morgen", "avond", "nacht", "middag", "ochtend", "voormiddag", "namiddag",
+            "maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag", "zondag",
+            "januari", "februari", "maart", "april", "juni", "juli", "augustus", "september", "oktober", "november", "december",
+            "lente", "zomer", "herfst", "winter",
+            "vraag", "antwoord", "probleem", "oplossing", "idee", "plan", "doel", "reden", "gevolg", "oorzaak",
+            "begin", "einde", "midden", "rand", "kant", "hoek", "punt", "lijn", "vlak", "ruimte", "plaats", "positie",
+            "grootte", "lengte", "breedte", "hoogte", "diepte", "gewicht", "snelheid", "kracht", "energie", "warmte", "licht",
+            "geluid", "geur", "smaak", "gevoel", "pijn", "vreugde", "verdriet", "angst", "woede", "liefde", "haat", "jaloezie",
+            "ziekte", "gezondheid", "medicijn", "behandeling", "operatie", "herstel",
+            "voedsel", "dranken", "maaltijd", "ontbijt", "lunch", "diner", "snack", "toetje",
+            "kleding", "schoenen", "sieraden", "accessoires", "mode", "stijl",
+            "verkeer", "voertuig", "brandstof", "benzine", "diesel",
+            "natuur", "milieu", "klimaat", "weer", "temperatuur", "vochtigheid", "druk",
+            "plant", "dier", "insect", "vogel", "vissen", "zoogdier", "reptiel",
+            "kunst", "muziek", "theater", "film", "literatuur", "poëzie", "roman", "verhaal", "gedicht",
+            "sport", "voetbal", "tennis", "hockey", "basketbal", "volleybal", "zwemmen", "fietsen", "hardlopen",
+            "spel", "wedstrijd", "competitie", "kampioenschap", "prijs", "medaille", "trofee",
+            "politiek", "regering", "parlement", "minister", "president", "koning", "koningin", "prins", "prinses",
+            "economie", "handel", "industrie", "landbouw", "visserij", "mijnbouw", "energie", "technologie",
+            "wetenschap", "onderzoek", "ontdekking", "uitvinding", "theorie", "hypothese", "experiment", "resultaat",
+            "onderwijs", "opleiding", "cursus", "examen", "diploma", "graad",
+            "recht", "wet", "regel", "plicht", "vrijheid", "gelijkheid", "vrede", "oorlog", "conflict", "strijd",
+            "geloof", "religie", "kerk", "moskee", "tempel", "synagoge",
+            "feest", "verjaardag", "bruiloft", "begrafenis", "vakantie", "reis", "uitstap", "excursie",
+            // Common adjectives
+            "groot", "klein", "lang", "kort", "breed", "smal", "hoog", "laag", "diep", "vlak", "dik", "dun",
+            "zwaar", "licht", "hard", "zacht", "warm", "koud", "heet", "nat", "droog", "schoon", "vuil",
+            "mooi", "lelijk", "goed", "slecht", "nieuw", "jong", "oud", "rijk", "arm", "vol", "leeg",
+            "sterk", "zwak", "snel", "traag", "vroeg", "laat", "druk", "rustig", "stil", "luid",
+            "blij", "triest", "boos", "bang", "moe", "ziek", "gezond", "fit", "lui", "actief",
+            "slim", "dom", "wijs", "gek", "raar", "normaal", "vreemd", "bekend", "onbekend", "beroemd",
+            "duur", "goedkoop", "gratis", "betaald", "rijk", "arm",
+            "makkelijk", "moeilijk", "simpel", "complex", "duidelijk", "vaag", "helder", "donker",
+            "veilig", "gevaarlijk", "vreedzaam", "gewelddadig", "eerlijk", "oneerlijk", "rechtvaardig",
+            "precies", "ongeveer", "zeker", "onzeker", "mogelijk", "onmogelijk", "nodig", "overbodig",
+            "alleen", "samen", "apart", "gezamenlijk", "individueel", "collectief",
+            "lokaal", "nationaal", "internationaal", "globaal", "regionaal",
+            // Additional verbs
+            "openen", "sluiten", "beginnen", "eindigen", "stoppen", "starten", "verdergaan",
+            "groeien", "krimpen", "stijgen", "dalen", "toenemen", "afnemen", "veranderen",
+            "bewegen", "verplaatsen", "verhuizen", "reizen", "vertrekken", "aankomen", "blijven",
+            "wachten", "haasten", "vertragen", "versnellen",
+            "kiezen", "beslissen", "bepalen", "plannen", "organiseren", "regelen", "verzorgen",
+            "betalen", "kopen", "verkopen", "ruilen", "lenen", "terugbetalen", "sparen", "uitgeven",
+            "winnen", "verliezen", "gelijkspelen", "deelnemen", "meedoen", "opgeven",
+            "ontmoeten", "kennismaken", "afspreken", "bezoeken", "uitnodigen", "ontvangen",
+            "geloven", "vertrouwen", "twijfelen", "hopen", "verwachten", "vrezen", "wensen"
+        ];
+
+        // Level 3: Long words (8+ characters) - 500+ real Dutch words
+        const DUTCH_LEVEL3 = [
+            // Add to existing COMPOUND_WORDS
+            ...COMPOUND_WORDS,
+            // Common long words from frequency lists
+            "belangrijk", "verschillende", "natuurlijk", "eigenlijk", "misschien", "bijvoorbeeld", "waarschijnlijk",
+            "ondertussen", "eindelijk", "helemaal", "tenminste", "tenslotte", "bovendien", "daarnaast", "daarentegen",
+            "uiteindelijk", "voorlopig", "onmiddellijk", "plotseling", "langzamerhand", "geleidelijk",
+            "noodzakelijk", "verantwoordelijk", "onafhankelijk", "afhankelijk", "beschikbaar", "bereikbaar",
+            "begrijpelijk", "onbegrijpelijk", "aanvaardbaar", "onaanvaardbaar", "acceptabel", "onacceptabel",
+            "interessant", "fascinerend", "verrassend", "verbazend", "teleurstellend", "bevredigend",
+            "prachtig", "schitterend", "fantastisch", "geweldig", "uitstekend", "magnifiek", "wonderbaar",
+            "verschrikkelijk", "afschuwelijk", "vreselijk", "walgelijk", "gruwelijk",
+            "ongelooflijk", "onvoorstelbaar", "onwaarschijnlijk", "onmogelijk", "onwerkelijk",
+            // Compound nouns
+            "schoolgebouw", "kantoorgebouw", "flatgebouw", "appartement", "woonkamer", "slaapkamer", "badkamer", "kinderkamer",
+            "keukentafel", "eettafel", "salontafel", "bureautafel", "nachtkastje", "boekenkast", "kledingkast",
+            "wasmachine", "droger", "strijkijzer", "stofzuiger", "koelkast", "diepvriezer", "magnetron", "broodrooster",
+            "televisie", "computer", "telefoon", "smartphone", "koptelefoon", "oortelefoon", "luidsprekers",
+            "fietsenstalling", "parkeerplaats", "bushalte", "treinstation", "vliegveld", "verkeerslichr",
+            "supermarkt", "boekenwinkel", "kledingwinkel", "schoenwinkel", "speelgoedwinkel", "bloemwinkel",
+            "ziekenhuis", "huisarts", "tandarts", "apotheek", "drogisterij", "zorgverlener",
+            "basisschool", "middelbare", "universiteit", "hogeschool", "bibliotheek", "studiezaal",
+            "politiebureau", "brandweerkazerne", "gemeentehuis", "postkantoor", "belastingdienst",
+            "verjaardags", "kerstfeest", "paasfeest", "nieuwjaars", "bruilofts", "begrafenis",
+            "voetbalveld", "tennisbaan", "hockeyveld", "basketbalveld", "zwembad", "sportschool", "schaatsbaan",
+            "wandelpaden", "fietsroutes", "autosnelweg", "ringweg", "rondweg",
+            // Common verbs (long forms)
+            "veranderen", "verbeteren", "verslechteren", "vergroten", "verkleinen", "verlengen", "verkorten",
+            "ontwikkelen", "organiseren", "structureren", "plannen", "voorbereiden", "uitvoeren", "evalueren",
+            "analyseren", "onderzoeken", "bestuderen", "observeren", "concluderen",
+            "communiceren", "discussiëren", "argumenteren", "overtuigen", "motiveren", "inspireren",
+            "samenwerken", "coördineren", "delegeren", "superviseren", "controleren",
+            "produceren", "consumeren", "distribueren", "exporteren", "importeren",
+            "investeren", "financieren", "budgetteren", "besparen", "verspillen",
+            "beginnen", "eindigen", "voortzetten", "onderbreken", "hervatten",
+            "ondersteunen", "begeleiden", "adviseren", "consulteren",
+            "informeren", "presenteren", "demonstreren", "illustreren",
+            "registreren", "documenteren", "archiveren", "classificeren",
+            "identificeren", "specificeren", "definiëren", "beschrijven",
+            "vergelijken", "contrasteren", "onderscheiden", "categoriseren",
+            // Abstract nouns
+            "ontwikkeling", "verandering", "verbetering", "verslechtering", "groei", "krimp",
+            "mogelijkheid", "waarschijnlijkheid", "zekerheid", "onzekerheid", "twijfel",
+            "verantwoordelijkheid", "aansprakelijkheid", "verplichting", "verbintenis",
+            "overeenkomst", "afspraak", "contract", "regeling", "wetgeving",
+            "overheid", "gemeente", "provincie", "ministerie", "parlement", "regering",
+            "democratie", "monarchie", "republiek", "dictatuur", "aristocratie",
+            "economie", "industrie", "landbouw", "technologie", "wetenschap", "onderzoek",
+            "onderwijs", "opleiding", "training", "cursus", "workshop", "conferentie",
+            "gezondheid", "welzijn", "veiligheid", "bescherming", "preventie", "behandeling",
+            "communicatie", "informatie", "technologie", "innovatie", "creativiteit",
+            "samenleving", "gemeenschap", "maatschappij", "cultuur", "traditie", "gewoontes",
+            "religie", "spiritualiteit", "filosofie", "psychologie", "sociologie",
+            "literatuur", "geschiedenis", "geografie", "biologie", "scheikunde", "natuurkunde",
+            "wiskunde", "statistiek", "informatica", "engineering", "architectuur",
+            "management", "leiderschap", "organisatie", "administratie", "bureaucratie",
+            // Long adjectives
+            "onvoorwaardelijk", "onherroepelijk", "onveranderlijk", "onverantwoordelijk",
+            "onaantastbaar", "onbereikbaar", "ontoegankelijk", "onbetaalbaar", "onbeschrijfelijk",
+            "buitengewoon", "uitzonderlijk", "bijzonder", "opmerkelijk", "gedenkwaardig",
+            "indrukwekkend", "overweldigend", "adembenemend", "hartveroverend",
+            "teleurstellend", "ontmoedigend", "demotiverend", "frustrerend",
+            "enthousiast", "gemotiveerd", "geïnspireerd", "gedreven", "ambitieus",
+            "professioneel", "competent", "deskundig", "ervaren", "gekwalificeerd",
+            "internationaal", "multinationaal", "wereldwijd", "grensoverschrijdend",
+            "milieuvriendelijk", "duurzaam", "herbruikbaar", "recyclebaar", "biologisch",
+            "betrouwbaar", "afhankelijk", "onafhankelijk", "zelfstandig", "autonoom",
+            "voorzichtig", "onvoorzichtig", "roekeloos", "overmoedig",
+            // Additional compound words
+            "huishouden", "huishouding", "huisvesting", "huisvuil", "huisdier", "huiswerk",
+            "schoolwerk", "schooltijd", "schoolplein", "schooljaar", "schoolvakantie",
+            "werkplek", "werkgever", "werknemer", "werktijd", "werkdag", "werkweek", "werkzaam",
+            "tijdelijk", "tijdloos", "tijdgebrek", "tijdschrift", "tijdsbestek",
+            "handwerk", "handdoek", "handtas", "handrem", "handschrift", "handeling",
+            "voetbal", "voetpad", "voetstap", "voetganger", "voetafdruk",
+            "waterval", "waterfles", "waterleiding", "waterdicht", "waterverf",
+            "luchtdruk", "luchtvaart", "luchthaven", "luchtfoto", "luchtballon",
+            "zonlicht", "zonnestraal", "zonnebrand", "zonnebril", "zonnepaneel",
+            "regenjas", "regenboog", "regenbui", "regenwater", "regenwoud",
+            "sneeuwbal", "sneeuwpop", "sneeuwvlok", "sneeuwstorm", "sneeuwwit"
+        ];
+
+        async function loadWordPools() {
+            if (poolsLoaded) return;
+
+            try {
+                const response = await fetch('/backend/dmt_tests.json');
+                if (!response.ok) throw new Error('Failed to load');
+                const tests = await response.json();
+
+                // Collect words from the JSON
+                const jsonWords = { 1: new Set(), 2: new Set(), 3: new Set() };
+                for (const test of tests) {
+                    if (test.sheets) {
+                        for (const level of ['1', '2', '3']) {
+                            if (test.sheets[level]) {
+                                test.sheets[level].forEach(w => {
+                                    const word = w.toLowerCase();
+                                    const len = word.length;
+                                    // Classify by length:
+                                    // L1: under 4 chars | L2: 4+ chars
+                                    // L3 words come only from curated compound list
+                                    if (len < 4) jsonWords[1].add(word);
+                                    else jsonWords[2].add(word);
+                                });
+                            }
+                        }
+                    }
+                }
+
+                // Merge with curated word lists
+                // L3 gets ONLY compound words (not mixed with others)
+                const pools = {
+                    1: new Set([...DUTCH_LEVEL1.filter(w => w.length < 4), ...jsonWords[1]]),
+                    2: new Set([...DUTCH_LEVEL1.filter(w => w.length >= 4), ...DUTCH_LEVEL2, ...jsonWords[2]]),
+                    3: new Set([...DUTCH_LEVEL3]) // Only curated compound words
+                };
+
+                WORD_POOLS = {
+                    1: [...pools[1]],
+                    2: [...pools[2]],
+                    3: [...pools[3]]
+                };
+                console.log(`[Leesfeest] Word pools: L1(<4)=${WORD_POOLS[1].length}, L2(4+)=${WORD_POOLS[2].length}, L3(compound)=${WORD_POOLS[3].length}`);
+                poolsLoaded = true;
+            } catch (e) {
+                console.warn('[Leesfeest] Using curated Dutch word lists');
+                WORD_POOLS = {
+                    1: [...new Set(DUTCH_LEVEL1.filter(w => w.length < 4))],
+                    2: [...new Set([...DUTCH_LEVEL1.filter(w => w.length >= 4), ...DUTCH_LEVEL2])],
+                    3: [...new Set(DUTCH_LEVEL3)]
+                };
+                console.log(`[Leesfeest] Curated pools: L1=${WORD_POOLS[1].length}, L2=${WORD_POOLS[2].length}, L3=${WORD_POOLS[3].length}`);
+                poolsLoaded = true;
+            }
+        }
+
+        function generateWordList(level) {
+            const pool = WORD_POOLS[level] || WORD_POOLS[1];
+            const shuffled = [...pool].sort(() => 0.5 - Math.random());
+            return shuffled.slice(0, 120);
+        }
+
+        // =====================================================
+        // SPELLING TEST - CITO Style Dictee
+        // =====================================================
+
+        // Spelling word categories based on CITO curriculum
+        const SPELLING_WORDS = {
+            // Groep 3-4: Basiswoorden (simple phonetic)
+            basiswoorden: [
+                "boom", "huis", "fiets", "auto", "school", "tafel", "stoel", "deur", "raam", "boek",
+                "pen", "tas", "bal", "kat", "hond", "vis", "muis", "vogel", "bloem", "boom",
+                "zon", "maan", "ster", "wolk", "regen", "sneeuw", "wind", "water", "vuur", "aarde",
+                "moeder", "vader", "kind", "baby", "oma", "opa", "broer", "zus", "vriend", "buur",
+                "brood", "melk", "kaas", "appel", "peer", "banaan", "koek", "soep", "thee", "sap",
+                "bed", "lamp", "klok", "telefoon", "computer", "radio", "televisie", "foto", "spiegel", "kast"
+            ],
+
+            // Groep 5-6: Werkwoorden (verb conjugations d/t/dt)
+            werkwoorden: [
+                "werkt", "loopt", "wordt", "leest", "schrijft", "speelt", "rent", "springt", "zit", "staat",
+                "slaapt", "eet", "drinkt", "kookt", "bakt", "wast", "veegt", "maakt", "breekt", "valt",
+                "hij werkt", "zij loopt", "het wordt", "ik lees", "jij schrijft", "wij spelen", "zij rennen",
+                "vindt", "houdt", "rijdt", "snijdt", "lijdt", "glijdt", "strijdt",
+                "antwoordt", "bloedt", "eindigt", "goedt", "handelt", "landden", "redt", "smedt"
+            ],
+
+            // Groep 6-7: 't Kofschip verleden tijd
+            kofschip: [
+                "werkte", "maakte", "fietste", "hoopte", "danste", "prakte", "kookte", "bakte", "waste", "poeste",
+                "leefde", "reisde", "probeerde", "verhuisde", "antwoordde", "landde", "brandde", "handelde",
+                "gewerkt", "gemaakt", "gefietst", "gehoopt", "gedanst", "geprobeerd", "verhuisd", "geland",
+                "ik werkte", "hij maakte", "zij fietste", "wij hoopten", "zij dansten"
+            ],
+
+            // Groep 5-6: Verdubbeling (double consonants)
+            verdubbeling: [
+                "bakker", "bakken", "bellen", "belle", "lekker", "dikker", "dapper", "pepper",
+                "rennen", "winner", "zwemmer", "kapper", "stoppen", "happen", "lappen", "knappen",
+                "bommen", "tommen", "kommen", "zonnen", "kunnen", "gunnen", "mennen", "hennen",
+                "botten", "katten", "ratten", "matten", "petten", "netten", "wetten", "zetten"
+            ],
+
+            // Groep 6-7: Open/gesloten lettergrepen
+            openGesloten: [
+                "bomen", "bommen", "lopen", "loppen", "maten", "matten", "noten", "notten",
+                "peren", "perren", "ramen", "rammen", "taken", "takken", "weken", "wekken",
+                "maken", "pakken", "halen", "vallen", "praten", "ratten", "slapen", "klappen"
+            ],
+
+            // Groep 7-8: Moeilijke woorden
+            moeilijk: [
+                "onmiddellijk", "waarschijnlijk", "noodzakelijk", "verantwoordelijk", "onafhankelijk",
+                "eigenlijk", "natuurlijk", "plotseling", "uiteindelijk", "tegenwoordig",
+                "belangrijk", "verschrikkelijk", "buitengewoon", "ongelooflijk", "fantastisch",
+                "misschien", "tenminste", "bovendien", "ondertussen", "desondanks"
+            ],
+
+            // Groep 7-8: Samenstellingen (compound words)
+            samenstellingen: [
+                "huisdeur", "voetbal", "schooltas", "fietspad", "speelplaats", "werkplek",
+                "tandenborstel", "koffiemachine", "boodschappentas", "afwasmachine", "stofzuiger",
+                "zonnebril", "regenboog", "sneeuwpop", "winterjas", "zomervakantie"
+            ]
+        };
+
+        // Get all spelling words as flat array
+        function getAllSpellingWords() {
+            return Object.values(SPELLING_WORDS).flat();
+        }
+
+        // Get spelling words by category
+        function getSpellingWordsByCategory(category) {
+            return SPELLING_WORDS[category] || [];
+        }
+
+        // Text-to-Speech for Dutch
+        function speakWord(word, onEnd = null) {
+            // Cancel any ongoing speech
+            speechSynthesis.cancel();
+
+            const utterance = new SpeechSynthesisUtterance(word);
+            utterance.lang = 'nl-NL';
+            utterance.rate = 0.8; // Slightly slower for clarity
+
+            // Try to find Dutch voice
+            const voices = speechSynthesis.getVoices();
+            const dutchVoice = voices.find(v => v.lang.startsWith('nl'));
+            if (dutchVoice) {
+                utterance.voice = dutchVoice;
+            }
+
+            if (onEnd) {
+                utterance.onend = onEnd;
+            }
+
+            speechSynthesis.speak(utterance);
+        }
+
+        // Case-insensitive spelling check
+        function checkSpelling(typed, correct) {
+            return typed.toLowerCase().trim() === correct.toLowerCase().trim();
+        }
+
+
+        const normalizePhonetic = (word) => {
+            if (!word) return "";
+            return word.toLowerCase()
+                .replace(/b/g, 'p').replace(/d/g, 't').replace(/z/g, 's')
+                .replace(/f+$/g, 'v').replace(/v/g, 'f').replace(/ij/g, 'ei')
+                .replace(/y/g, 'i').replace(/c/g, 'k').replace(/ch/g, 'g')
+                .replace(/x/g, 'ks').replace(/qu/g, 'kw')
+                .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?'"]/g, "").trim();
+        };
+
+        const isPhoneticMatch = (spoken, target) => {
+            const s = normalizePhonetic(spoken).replace(/\s+/g, '');
+            const t = normalizePhonetic(target).replace(/\s+/g, '');
+
+            // Exact match after normalization
+            if (s === t) return true;
+
+            // Empty check
+            if (!s || !t) return false;
+
+            // Substring match - if one contains the other, it's a match
+            if (s.length > 2 && t.length > 2 && (s.includes(t) || t.includes(s))) return true;
+
+            // Prefix match - if word starts the same way (first 2-3 chars)
+            const prefixLen = Math.min(3, Math.min(s.length, t.length));
+            if (prefixLen >= 2 && s.slice(0, prefixLen) === t.slice(0, prefixLen)) return true;
+
+            // Levenshtein-like distance check - VERY LENIENT for speed test
+            const maxLen = Math.max(s.length, t.length);
+            const minLen = Math.min(s.length, t.length);
+
+            // Allow bigger length differences
+            if (Math.abs(s.length - t.length) > 3) return false;
+
+            // Count character differences
+            let diffs = 0;
+            for (let i = 0; i < minLen; i++) {
+                if (s[i] !== t[i]) diffs++;
+            }
+            diffs += (maxLen - minLen);
+
+            // LENIENT: Allow more differences since this is a speed test
+            // Short words (1-4 chars): allow 2 diffs
+            // Medium words (5-7 chars): allow 3 diffs
+            // Long words (8+ chars): allow 4 diffs
+            let allowedDiffs;
+            if (t.length <= 4) allowedDiffs = 2;
+            else if (t.length <= 7) allowedDiffs = 3;
+            else allowedDiffs = 4;
+
+            return diffs <= allowedDiffs;
+        };
+
+
+        // --- COMPONENTS ---
+        const LoginScreen = ({ setScreen, setUser }) => {
+            const [email, setEmail] = useState('');
+            const [pass, setPass] = useState('');
+            const [err, setErr] = useState('');
+            const doLogin = async (e) => {
+                e.preventDefault();
+                try {
+                    await login(email, pass);
+                    const user = await getMe();
+                    setUser(user);
+                    setScreen('dashboard');
+                } catch (e) { setErr(e.message); }
+            };
+            return (
+                <div className="min-h-screen flex items-center justify-center p-4">
+                    <div className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-md border-4 border-slate-100">
+                        <h1 className="text-3xl font-black text-center text-[#118AB2] mb-8">Inloggen</h1>
+                        {err && <div className="bg-red-100 text-red-700 p-3 rounded mb-4">{err}</div>}
+                        <form onSubmit={doLogin} className="space-y-4">
+                            <input className="w-full p-3 border-2 rounded-xl" type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required />
+                            <input className="w-full p-3 border-2 rounded-xl" type="password" placeholder="Wachtwoord" value={pass} onChange={e => setPass(e.target.value)} required />
+                            <button type="submit" className="w-full bg-[#06D6A0] text-white font-black py-4 rounded-xl text-xl hover:scale-105 transition">Start!</button>
+                        </form>
+                        <p className="mt-4 text-center text-slate-500 cursor-pointer hover:underline" onClick={() => setScreen('register')}>Nog geen account?</p>
+                    </div>
+                </div>
+            );
+        };
+
+        const RegisterScreen = ({ setScreen }) => {
+            const [form, setForm] = useState({ name: '', email: '', password: '', group: 3 });
+            const [err, setErr] = useState('');
+            const doRegister = async (e) => {
+                e.preventDefault();
+                try {
+                    await register(form.name, form.email, form.password, form.group);
+                    setScreen('login');
+                } catch (e) { setErr(e.message); }
+            };
+            return (
+                <div className="min-h-screen flex items-center justify-center p-4">
+                    <div className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-md border-4 border-slate-100">
+                        <h1 className="text-3xl font-black text-center text-[#EF476F] mb-8">Nieuw Account</h1>
+                        {err && <div className="bg-red-100 text-red-700 p-3 rounded mb-4">{err}</div>}
+                        <form onSubmit={doRegister} className="space-y-4">
+                            <input className="w-full p-3 border-2 rounded-xl" placeholder="Naam" onChange={e => setForm({ ...form, name: e.target.value })} required />
+                            <input className="w-full p-3 border-2 rounded-xl" type="email" placeholder="Email" onChange={e => setForm({ ...form, email: e.target.value })} required />
+                            <input className="w-full p-3 border-2 rounded-xl" type="password" placeholder="Wachtwoord" onChange={e => setForm({ ...form, password: e.target.value })} required />
+                            <select className="w-full p-3 border-2 rounded-xl" onChange={e => setForm({ ...form, group: e.target.value })}>
+                                {[3, 4, 5, 6, 7, 8].map(g => <option key={g} value={g}>Groep {g}</option>)}
+                            </select>
+                            <button type="submit" className="w-full bg-[#FFD166] text-slate-800 font-black py-4 rounded-xl text-xl hover:scale-105 transition">Aanmaken</button>
+                        </form>
+                        <p className="mt-4 text-center text-slate-500 cursor-pointer hover:underline" onClick={() => setScreen('login')}>Terug naar inloggen</p>
+                    </div>
+                </div>
+            );
+        };
+
+        // =====================================================
+        // HISTORY SECTION WITH CHARTS
+        // =====================================================
+        const HistorySection = ({ dmtHistory, userId }) => {
+            const [activeTab, setActiveTab] = useState('dmt');
+            const [showTable, setShowTable] = useState(false);
+            const [spellingHistory, setSpellingHistory] = useState([]);
+
+            const storageKey = `spelling_history_${userId || 'guest'}`;
+
+            // Load spelling history from localStorage (user-specific)
+            useEffect(() => {
+                const stored = localStorage.getItem(storageKey);
+                if (stored) {
+                    try {
+                        setSpellingHistory(JSON.parse(stored));
+                    } catch (e) {
+                        console.warn('Failed to parse spelling history');
+                    }
+                }
+            }, []);
+
+            const currentHistory = activeTab === 'dmt' ? dmtHistory : spellingHistory;
+
+            if (currentHistory.length === 0 && dmtHistory.length === 0 && spellingHistory.length === 0) {
+                return null;
+            }
+
+            // Simple SVG Line Chart
+            const renderChart = (data, color) => {
+                if (!data || data.length === 0) return (
+                    <div className="h-40 flex items-center justify-center text-slate-400">
+                        Nog geen resultaten
+                    </div>
+                );
+
+                const scores = data.map(d => activeTab === 'dmt' ? (d.correct_words || 0) : (d.score || 0));
+                const maxScore = Math.max(...scores, 10);
+                const width = 400;
+                const height = 150;
+                const padding = 30;
+                const chartWidth = width - padding * 2;
+                const chartHeight = height - padding * 2;
+
+                const points = scores.map((score, i) => {
+                    const x = padding + (chartWidth / Math.max(scores.length - 1, 1)) * i;
+                    const y = height - padding - (score / maxScore) * chartHeight;
+                    return { x, y, score };
+                });
+
+                const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+
+                return (
+                    <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-40">
+                        {/* Grid lines */}
+                        {[0, 0.25, 0.5, 0.75, 1].map(ratio => (
+                            <line
+                                key={ratio}
+                                x1={padding}
+                                y1={height - padding - chartHeight * ratio}
+                                x2={width - padding}
+                                y2={height - padding - chartHeight * ratio}
+                                stroke="#e2e8f0" strokeWidth="1"
+                            />
+                        ))}
+
+                        {/* Y-axis labels */}
+                        {[0, 0.5, 1].map(ratio => (
+                            <text
+                                key={ratio}
+                                x={padding - 5}
+                                y={height - padding - chartHeight * ratio + 4}
+                                textAnchor="end" fontSize="10" fill="#94a3b8"
+                            >
+                                {Math.round(maxScore * ratio)}
+                            </text>
+                        ))}
+
+                        {/* Line */}
+                        <path d={linePath} fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+
+                        {/* Points */}
+                        {points.map((p, i) => (
+                            <g key={i}>
+                                <circle cx={p.x} cy={p.y} r="6" fill={color} />
+                                <circle cx={p.x} cy={p.y} r="4" fill="white" />
+                            </g>
+                        ))}
+                    </svg>
+                );
+            };
+
+            return (
+                <div className="mt-8">
+                    <h3 className="text-2xl font-black text-slate-700 mb-4">Geschiedenis</h3>
+
+                    {/* Tabs */}
+                    <div className="flex gap-2 mb-6">
+                        <button
+                            onClick={() => setActiveTab('dmt')}
+                            className={`px-6 py-2 rounded-xl font-bold transition-all ${activeTab === 'dmt'
+                                ? 'bg-[#06D6A0] text-white'
+                                : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                                }`}
+                        >
+                            Lezen ({dmtHistory.length})
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('spelling')}
+                            className={`px-6 py-2 rounded-xl font-bold transition-all ${activeTab === 'spelling'
+                                ? 'bg-[#FFD166] text-slate-800'
+                                : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                                }`}
+                        >
+                            Spelling ({spellingHistory.length})
+                        </button>
+                    </div>
+
+                    {/* Chart */}
+                    <div className="bg-white p-4 rounded-2xl shadow-lg mb-4">
+                        <h4 className="text-sm font-bold text-slate-500 mb-2">Score Verloop</h4>
+                        {renderChart(currentHistory, activeTab === 'dmt' ? '#06D6A0' : '#FFD166')}
+                    </div>
+
+                    {/* Toggle Table */}
+                    <button
+                        onClick={() => setShowTable(!showTable)}
+                        className="text-slate-500 font-bold text-sm hover:text-slate-700 mb-4"
+                    >
+                        {showTable ? '▼ Verberg tabel' : '▶ Toon tabel'}
+                    </button>
+
+                    {/* Score Table */}
+                    {showTable && currentHistory.length > 0 && (
+                        <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+                            <table className="w-full">
+                                <thead className="bg-slate-50">
+                                    <tr>
+                                        <th className="text-left p-3 text-slate-600 font-bold">Datum</th>
+                                        <th className="text-right p-3 text-slate-600 font-bold">Score</th>
+                                        {activeTab === 'spelling' && (
+                                            <th className="text-right p-3 text-slate-600 font-bold">Categorie</th>
+                                        )}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {currentHistory.slice().reverse().map((h, i) => (
+                                        <tr key={i} className="border-t border-slate-100">
+                                            <td className="p-3 text-slate-600">
+                                                {new Date(h.created_at || h.date).toLocaleDateString('nl-NL', {
+                                                    day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                                                })}
+                                            </td>
+                                            <td className={`p-3 text-right font-black text-xl ${activeTab === 'dmt' ? 'text-[#06D6A0]' : 'text-[#FFD166]'}`}>
+                                                {activeTab === 'dmt' ? h.correct_words : h.score}/{activeTab === 'dmt' ? '?' : h.total}
+                                            </td>
+                                            {activeTab === 'spelling' && (
+                                                <td className="p-3 text-right text-slate-500">{h.category}</td>
+                                            )}
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+
+                    {showTable && currentHistory.length === 0 && (
+                        <div className="bg-white p-6 rounded-2xl shadow-lg text-center text-slate-400">
+                            Nog geen {activeTab === 'dmt' ? 'Lezen' : 'Spelling'} resultaten
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const Dashboard = ({ user, setScreen, setUser }) => {
+            const [history, setHistory] = useState([]);
+            useEffect(() => { getHistory().then(setHistory); }, []);
+            const logout = () => { localStorage.removeItem('dmt_token'); setUser(null); setScreen('login'); };
+            return (
+                <div className="min-h-screen p-6 max-w-4xl mx-auto">
+                    <header className="flex justify-between items-center mb-12">
+                        <div>
+                            <h1 className="text-3xl font-black text-slate-800">Hallo, {user.name}!</h1>
+                            <p className="text-slate-500 font-bold">Groep {user.school_group}</p>
+                        </div>
+                        <button onClick={logout} className="text-slate-400 font-bold hover:text-red-500">Uitloggen</button>
+                    </header>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
+                        <div onClick={() => setScreen('test')} className="bg-white p-8 rounded-3xl shadow-xl border-l-8 border-[#06D6A0] cursor-pointer hover:scale-105 transition">
+                            <h2 className="text-3xl font-black text-slate-800 mb-2">📖 Technisch Lezen</h2>
+                            <p className="text-slate-500">Lees woorden zo snel mogelijk. 3 kaarten.</p>
+                        </div>
+                        <div onClick={() => setScreen('spelling')} className="bg-white p-8 rounded-3xl shadow-xl border-l-8 border-[#FFD166] cursor-pointer hover:scale-105 transition">
+                            <h2 className="text-3xl font-black text-slate-800 mb-2">📝 Spelling Dictee</h2>
+                            <p className="text-slate-500">Luister naar woorden en typ correct.</p>
+                        </div>
+                    </div>
+                    {/* Enhanced History Section */}
+                    <HistorySection dmtHistory={history} userId={user.id} />
+                </div>
+            );
+        };
+
+        const DMTTest = ({ setScreen }) => {
+            const [phase, setPhase] = useState('intro');
+            const [card, setCard] = useState(1);
+            const [timeLeft, setTimeLeft] = useState(60);
+            const [results, setResults] = useState({});
+            const [allSpokenWords, setAllSpokenWords] = useState([]); // Just collect all spoken words
+
+            const mediaRecorder = useRef(null);
+            const socket = useRef(null);
+            const timerRef = useRef(null);
+
+            const [cardsReady, setCardsReady] = useState(false);
+            const [CARDS, setCARDS] = useState({ 1: [], 2: [], 3: [] });
+
+            // Load word pools on mount
+            useEffect(() => {
+                loadWordPools().then(() => {
+                    setCARDS({
+                        1: generateWordList(1),
+                        2: generateWordList(2),
+                        3: generateWordList(3)
+                    });
+                    setCardsReady(true);
+                });
+            }, []);
+
+            const stopRecognition = () => {
+                if (mediaRecorder.current) {
+                    try { mediaRecorder.current.stop(); } catch (e) { }
+                    mediaRecorder.current = null;
+                }
+                if (socket.current) {
+                    socket.current.close();
+                    socket.current = null;
+                }
+            };
+
+            const startRecognition = async () => {
+                stopRecognition();
+
+                // Use backend WebSocket proxy (API key is secured on server)
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const wsUrl = `${protocol}//${window.location.host}/api/speech/transcribe`;
+
+                console.log('[Leesfeest] Connecting to backend proxy...');
+
+                try {
+                    socket.current = new WebSocket(wsUrl);
+                    socket.current.onopen = async () => {
+                        console.log('[Leesfeest] Connected! Start reading.');
+                        try {
+                            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                            mediaRecorder.current = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+                            mediaRecorder.current.ondataavailable = (event) => {
+                                if (event.data.size > 0 && socket.current?.readyState === 1) {
+                                    socket.current.send(event.data);
+                                }
+                            };
+                            mediaRecorder.current.start(100);
+                        } catch (err) { console.error('[Leesfeest] Mic error:', err); }
+                    };
+
+                    socket.current.onmessage = (message) => {
+                        const received = JSON.parse(message.data);
+                        const transcript = received.channel?.alternatives[0]?.transcript;
+                        if (transcript) {
+                            const words = transcript.toLowerCase().trim().split(/\s+/).filter(w => w.length > 0);
+                            console.log('[Leesfeest] Recognized:', words.join(' '));
+                            setAllSpokenWords(prev => [...prev, ...words]);
+                        }
+                    };
+
+                    socket.current.onerror = (error) => console.error('[Leesfeest] Socket Error:', error);
+                    socket.current.onclose = (e) => console.log('[Leesfeest] Socket closed:', e.code, e.reason);
+                } catch (err) { console.error('[Leesfeest] WS failed:', err); }
+            };
+
+            // Only timer - no other intervals
+            useEffect(() => {
+                if (phase === 'card' && timeLeft > 0) {
+                    timerRef.current = setTimeout(() => setTimeLeft(t => t - 1), 1000);
+                } else if (phase === 'card' && timeLeft === 0) {
+                    finishCard();
+                }
+                return () => clearTimeout(timerRef.current);
+            }, [phase, timeLeft]);
+
+            useEffect(() => {
+                return () => stopRecognition();
+            }, []);
+
+            const [countdown, setCountdown] = useState(0);
+
+            const startCard = () => {
+                // Start mic warmup during countdown
+                startRecognition();
+                setAllSpokenWords([]);
+
+                // 3-2-1-GO countdown
+                setCountdown(3);
+                setPhase('countdown');
+
+                let count = 3;
+                const countdownInterval = setInterval(() => {
+                    count--;
+                    if (count > 0) {
+                        setCountdown(count);
+                    } else {
+                        clearInterval(countdownInterval);
+                        setCountdown(0);
+                        setPhase('card');
+                        setTimeLeft(60);
+                    }
+                }, 1000);
+            };
+
+            const finishCard = () => {
+                stopRecognition();
+
+                // Match spoken words against card words at the end
+                const cardWords = CARDS[card];
+                const spokenSet = new Set(allSpokenWords.map(w => normalizePhonetic(w)));
+
+                let score = 0;
+                const matchedWords = [];
+
+                for (const targetWord of cardWords) {
+                    const normalizedTarget = normalizePhonetic(targetWord);
+                    // Check if any spoken word matches this target
+                    for (const spoken of spokenSet) {
+                        if (isPhoneticMatch(spoken, normalizedTarget)) {
+                            score++;
+                            matchedWords.push(targetWord);
+                            spokenSet.delete(spoken); // Don't double count
+                            break;
+                        }
+                    }
+                }
+
+                console.log('[DMT] Card', card, 'finished. Score:', score, '/', cardWords.length);
+                console.log('[DMT] Matched words:', matchedWords);
+                console.log('[DMT] All spoken words:', allSpokenWords);
+
+                const newResults = { ...results, [card]: { score, spoken: allSpokenWords, matched: matchedWords } };
+                setResults(newResults);
+
+                if (card < 3) {
+                    setCard(c => c + 1);
+                    setPhase('intro');
+                } else {
+                    saveSession(newResults);
+                    setPhase('finish');
+                    if (window.confetti) window.confetti();
+                }
+            };
+
+            if (phase === 'finish') return (
+                <div className="h-screen flex flex-col items-center justify-center text-center p-4 overflow-y-auto">
+                    <h1 className="text-5xl font-black text-[#06D6A0] mb-8">Klaar!</h1>
+                    <div className="space-y-4 mb-8 w-full max-w-2xl">
+                        {[1, 2, 3].map(c => (
+                            <div key={c} className="bg-white p-4 rounded-xl shadow">
+                                <div className="text-2xl font-bold text-slate-600 mb-2">Kaart {c}: {results[c]?.score || 0} woorden</div>
+                                {results[c] && (
+                                    <details className="text-left">
+                                        <summary className="cursor-pointer text-slate-400 text-sm hover:text-slate-600">Toon details</summary>
+                                        <div className="text-xs p-2 bg-slate-50 rounded mt-2">
+                                            <p className="mb-2"><b>Gehoord ({results[c].spoken?.length || 0}):</b> {results[c].spoken?.join(', ') || '(geen)'}</p>
+                                            <p><b>Gematcht ({results[c].matched?.length || 0}):</b> {results[c].matched?.join(', ') || '(geen)'}</p>
+                                        </div>
+                                    </details>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                    <button onClick={() => setScreen('dashboard')} className="bg-[#118AB2] text-white font-bold py-3 px-8 rounded-xl hover:scale-105 transition">Naar Dashboard</button>
+                </div>
+            );
+
+            if (phase === 'intro') return (
+                <div className="h-screen flex flex-col items-center justify-center p-4 text-center">
+                    <h2 className="text-4xl font-bold mb-4">{card === 1 ? 'Klaar voor de start?' : `Kaart ${card}`}</h2>
+                    <p className="mb-8 text-slate-500 max-w-md mx-auto">We gaan 3 kaarten lezen. Voor elke kaart heb je 1 minuut. Open F12 om herkende woorden te zien.</p>
+                    <button onClick={startCard} className="bg-[#06D6A0] text-white font-black text-3xl py-6 px-12 rounded-2xl shadow-xl hover:scale-105 transition-all">START ▶️</button>
+                    {card > 1 && <p className="mt-4 text-slate-400 font-bold">Vorige score: {results[card - 1]?.score || 0} woorden</p>}
+                    {card === 1 && (
+                        <button
+                            onClick={() => setScreen('dashboard')}
+                            className="mt-6 text-slate-400 hover:text-slate-600 font-bold"
+                        >
+                            ← Terug naar Dashboard
+                        </button>
+                    )}
+                </div>
+            );
+
+            if (phase === 'countdown') return (
+                <div className="h-screen flex flex-col items-center justify-center p-4 text-center bg-gradient-to-br from-slate-900 to-slate-800">
+                    <div className="text-9xl font-black text-white animate-pulse mb-8">
+                        {countdown > 0 ? countdown : 'GO!'}
+                    </div>
+                    <div className="flex items-center gap-2 text-[#06D6A0]">
+                        <div className="w-3 h-3 bg-[#06D6A0] rounded-full animate-ping"></div>
+                        <span className="text-lg font-bold">Microfoon actief...</span>
+                    </div>
+                    <p className="mt-4 text-slate-400">Kaart {card} begint zo!</p>
+                </div>
+            );
+
+            // Simple display - no highlighting, no animations, just words
+            return (
+                <div className="h-screen flex flex-col p-4 max-w-6xl mx-auto">
+                    <div className="flex justify-between items-center mb-4">
+                        <span className="font-bold text-xl text-slate-400">KAART {card}</span>
+                        <span className={`font-mono text-4xl font-black px-4 py-1 rounded-xl ${timeLeft < 10 ? 'text-red-500 bg-red-50' : 'text-slate-800 bg-slate-100'}`}>{timeLeft}s</span>
+                    </div>
+                    <div className="flex-1 bg-white rounded-2xl border border-slate-200 p-6 grid grid-cols-5 gap-3 content-start overflow-y-auto">
+                        {CARDS[card].map((w, i) => (
+                            <React.Fragment key={i}>
+                                {i > 0 && i % 50 === 0 && (
+                                    <div className="col-span-5 h-1 bg-gradient-to-r from-[#06D6A0] via-[#FFD166] to-[#EF476F] rounded-full my-2 opacity-60"></div>
+                                )}
+                                <div className="flex items-center justify-center p-3 rounded-lg bg-slate-50 text-xl font-medium text-slate-700">
+                                    {w}
+                                </div>
+                            </React.Fragment>
+                        ))}
+                    </div>
+                    <div className="mt-4 flex justify-between items-center">
+                        <button onClick={() => setScreen('dashboard')} className="text-slate-400 font-bold hover:text-slate-600">← Dashboard</button>
+                        <span className="text-sm text-slate-400">Gesproken: {allSpokenWords.length} woorden</span>
+                        <button onClick={finishCard} className="text-slate-400 font-bold hover:text-red-500">STOP</button>
+                    </div>
+                </div>
+            );
+        };
+
+
+        // =====================================================
+        // SPELLING TEST COMPONENT
+        // =====================================================
+        const SpellingTest = ({ setScreen, userId }) => {
+            const [phase, setPhase] = useState('intro'); // intro, testing, feedback, finish
+            const [category, setCategory] = useState('basiswoorden');
+            const [words, setWords] = useState([]);
+            const [currentIndex, setCurrentIndex] = useState(0);
+            const [userInput, setUserInput] = useState('');
+            const [results, setResults] = useState([]); // {word, typed, correct}
+            const [showFeedback, setShowFeedback] = useState(false);
+            const [lastCorrect, setLastCorrect] = useState(null);
+
+            const WORDS_PER_TEST = 10;
+
+            // Initialize voices on mount
+            useEffect(() => {
+                // Load voices (needed for some browsers)
+                speechSynthesis.getVoices();
+                const loadVoices = () => speechSynthesis.getVoices();
+                speechSynthesis.onvoiceschanged = loadVoices;
+            }, []);
+
+            const startTest = () => {
+                const categoryWords = SPELLING_WORDS[category] || [];
+                const shuffled = [...categoryWords].sort(() => 0.5 - Math.random());
+                setWords(shuffled.slice(0, WORDS_PER_TEST));
+                setCurrentIndex(0);
+                setResults([]);
+                setUserInput('');
+                setPhase('testing');
+            };
+
+            const playCurrentWord = () => {
+                if (words[currentIndex]) {
+                    speakWord(words[currentIndex]);
+                }
+            };
+
+            // Auto-play word when entering testing phase or moving to next word
+            useEffect(() => {
+                if (phase === 'testing' && words[currentIndex]) {
+                    setTimeout(() => playCurrentWord(), 500);
+                }
+            }, [phase, currentIndex, words]);
+
+            const submitAnswer = () => {
+                const currentWord = words[currentIndex];
+                const isCorrect = checkSpelling(userInput, currentWord);
+
+                setResults(prev => [...prev, {
+                    word: currentWord,
+                    typed: userInput,
+                    correct: isCorrect
+                }]);
+
+                setLastCorrect(isCorrect);
+                setShowFeedback(true);
+
+                // Show feedback for 1.5 seconds
+                setTimeout(() => {
+                    setShowFeedback(false);
+                    setUserInput('');
+
+                    if (currentIndex + 1 >= words.length) {
+                        setPhase('finish');
+                    } else {
+                        setCurrentIndex(prev => prev + 1);
+                    }
+                }, 1500);
+            };
+
+            const handleKeyPress = (e) => {
+                if (e.key === 'Enter' && !showFeedback && userInput.trim()) {
+                    submitAnswer();
+                }
+            };
+
+            const score = results.filter(r => r.correct).length;
+
+            // Save results to localStorage when test finishes
+            useEffect(() => {
+                if (phase === 'finish' && results.length > 0) {
+                    const historyEntry = {
+                        date: new Date().toISOString(),
+                        score: score,
+                        total: words.length,
+                        category: category
+                    };
+
+                    try {
+                        const storageKey = `spelling_history_${userId || 'guest'}`;
+                        const existing = JSON.parse(localStorage.getItem(storageKey) || '[]');
+                        existing.push(historyEntry);
+                        localStorage.setItem(storageKey, JSON.stringify(existing));
+                        console.log('[Spelling] Saved result to history:', historyEntry);
+                    } catch (e) {
+                        console.warn('Failed to save spelling history', e);
+                    }
+                }
+            }, [phase]);
+
+            // Category options
+            const categories = [
+                { key: 'basiswoorden', label: 'Basiswoorden (Groep 3-4)', color: '#06D6A0' },
+                { key: 'werkwoorden', label: 'Werkwoorden d/t/dt (Groep 5-6)', color: '#118AB2' },
+                { key: 'kofschip', label: "'t Kofschip (Groep 6-7)", color: '#FFD166' },
+                { key: 'verdubbeling', label: 'Verdubbeling (Groep 5-6)', color: '#EF476F' },
+                { key: 'openGesloten', label: 'Open/Gesloten (Groep 6-7)', color: '#073B4C' },
+                { key: 'moeilijk', label: 'Moeilijke woorden (Groep 7-8)', color: '#9B59B6' },
+                { key: 'samenstellingen', label: 'Samenstellingen (Groep 7-8)', color: '#E74C3C' }
+            ];
+
+            if (phase === 'intro') return (
+                <div className="min-h-screen flex flex-col items-center justify-center p-4 text-center">
+                    <h1 className="text-4xl font-black text-slate-800 mb-4">📝 Spelling Dictee</h1>
+                    <p className="text-slate-500 mb-8 max-w-md">Luister naar het woord en typ het correct. Je krijgt {WORDS_PER_TEST} woorden.</p>
+
+                    <div className="w-full max-w-md mb-8">
+                        <label className="block text-left text-slate-600 font-bold mb-2">Kies een categorie:</label>
+                        <div className="space-y-2">
+                            {categories.map(cat => (
+                                <div
+                                    key={cat.key}
+                                    onClick={() => setCategory(cat.key)}
+                                    className={`p-4 rounded-xl cursor-pointer border-2 transition-all ${category === cat.key
+                                        ? 'border-slate-800 bg-slate-100 scale-[1.02]'
+                                        : 'border-slate-200 bg-white hover:border-slate-300'
+                                        }`}
+                                    style={{ borderLeftWidth: '6px', borderLeftColor: cat.color }}
+                                >
+                                    <span className="font-bold">{cat.label}</span>
+                                    <span className="text-slate-400 text-sm ml-2">({SPELLING_WORDS[cat.key]?.length || 0} woorden)</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <button
+                        onClick={startTest}
+                        className="bg-[#06D6A0] text-white font-black text-2xl py-4 px-12 rounded-2xl shadow-xl hover:scale-105 transition-all"
+                    >
+                        START 🎧
+                    </button>
+                    <button
+                        onClick={() => setScreen('dashboard')}
+                        className="mt-4 text-slate-400 hover:text-slate-600"
+                    >
+                        ← Terug naar Dashboard
+                    </button>
+                </div>
+            );
+
+            if (phase === 'testing') return (
+                <div className="min-h-screen flex flex-col items-center justify-center p-4">
+                    <div className="w-full max-w-lg">
+                        {/* Progress */}
+                        <div className="mb-8">
+                            <div className="flex justify-between text-slate-500 mb-2">
+                                <button onClick={() => setScreen('dashboard')} className="text-slate-400 hover:text-slate-600 font-bold">← Dashboard</button>
+                                <span>Woord {currentIndex + 1} van {words.length}</span>
+                                <span>Score: {score}/{results.length}</span>
+                            </div>
+                            <div className="h-2 bg-slate-200 rounded-full">
+                                <div
+                                    className="h-full bg-[#06D6A0] rounded-full transition-all"
+                                    style={{ width: `${((currentIndex) / words.length) * 100}%` }}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Audio control */}
+                        <div className="bg-white p-8 rounded-3xl shadow-xl text-center mb-6">
+                            <button
+                                onClick={playCurrentWord}
+                                disabled={showFeedback}
+                                className="bg-[#118AB2] text-white font-bold text-xl py-4 px-8 rounded-2xl hover:scale-105 transition-all disabled:opacity-50"
+                            >
+                                🔊 Luister naar het woord
+                            </button>
+                            <p className="text-slate-400 text-sm mt-4">Klik om het woord opnieuw te horen</p>
+                        </div>
+
+                        {/* Input */}
+                        <div className="bg-white p-6 rounded-3xl shadow-xl">
+                            {showFeedback ? (
+                                <div className={`text-center p-6 rounded-xl ${lastCorrect ? 'bg-green-100' : 'bg-red-100'}`}>
+                                    <div className="text-4xl mb-2">{lastCorrect ? '✅' : '❌'}</div>
+                                    <div className={`text-2xl font-bold ${lastCorrect ? 'text-green-600' : 'text-red-600'}`}>
+                                        {lastCorrect ? 'Goed!' : 'Fout'}
+                                    </div>
+                                    {!lastCorrect && (
+                                        <div className="mt-2 text-slate-600">
+                                            Correct: <span className="font-bold">{words[currentIndex]}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <>
+                                    <input
+                                        type="text"
+                                        value={userInput}
+                                        onChange={(e) => setUserInput(e.target.value)}
+                                        onKeyPress={handleKeyPress}
+                                        placeholder="Typ het woord hier..."
+                                        autoFocus
+                                        className="w-full p-4 text-2xl text-center border-2 border-slate-200 rounded-xl focus:border-[#118AB2] focus:outline-none"
+                                    />
+                                    <button
+                                        onClick={submitAnswer}
+                                        disabled={!userInput.trim()}
+                                        className="w-full mt-4 bg-[#FFD166] text-slate-800 font-bold py-4 rounded-xl hover:scale-[1.02] transition-all disabled:opacity-50"
+                                    >
+                                        Controleer ↵
+                                    </button>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+
+            if (phase === 'finish') return (
+                <div className="min-h-screen flex flex-col items-center justify-center p-4 text-center">
+                    <h1 className="text-5xl font-black text-[#06D6A0] mb-4">🎉 Klaar!</h1>
+                    <div className="text-6xl font-black text-slate-800 mb-2">{score}/{words.length}</div>
+                    <p className="text-xl text-slate-500 mb-8">
+                        {score === words.length ? 'Perfect! 🌟' :
+                            score >= words.length * 0.7 ? 'Goed gedaan! 👏' :
+                                'Blijf oefenen! 💪'}
+                    </p>
+
+                    {/* Results review */}
+                    <div className="w-full max-w-md bg-white rounded-3xl shadow-xl p-6 mb-8">
+                        <h3 className="font-bold text-slate-700 mb-4">Overzicht:</h3>
+                        <div className="space-y-2 text-left">
+                            {results.map((r, i) => (
+                                <div key={i} className={`p-3 rounded-lg flex justify-between ${r.correct ? 'bg-green-50' : 'bg-red-50'}`}>
+                                    <span className={r.correct ? 'text-green-600' : 'text-red-600'}>
+                                        {r.correct ? '✓' : '✗'} {r.word}
+                                    </span>
+                                    {!r.correct && <span className="text-slate-400">jij: "{r.typed}"</span>}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="flex gap-4">
+                        <button
+                            onClick={() => setPhase('intro')}
+                            className="bg-[#FFD166] text-slate-800 font-bold py-3 px-8 rounded-xl hover:scale-105 transition"
+                        >
+                            Opnieuw
+                        </button>
+                        <button
+                            onClick={() => setScreen('dashboard')}
+                            className="bg-[#118AB2] text-white font-bold py-3 px-8 rounded-xl hover:scale-105 transition"
+                        >
+                            Dashboard
+                        </button>
+                    </div>
+                </div>
+            );
+
+            return null;
+        };
+
+
+        const App = () => {
+            const [user, setUser] = useState(null);
+            const [screen, setScreen] = useState('loading');
+            useEffect(() => {
+                getMe().then(u => { setUser(u); setScreen(u ? 'dashboard' : 'login'); }).catch(() => setScreen('login'));
+            }, []);
+            if (screen === 'loading') return <div className="h-screen flex items-center justify-center">Laden...</div>;
+            if (screen === 'login') return <LoginScreen setScreen={setScreen} setUser={setUser} />;
+            if (screen === 'register') return <RegisterScreen setScreen={setScreen} />;
+            if (screen === 'dashboard') return <Dashboard user={user} setScreen={setScreen} setUser={setUser} />;
+            if (screen === 'test') return <DMTTest setScreen={setScreen} />;
+            if (screen === 'spelling') return <SpellingTest setScreen={setScreen} userId={user?.id} />;
+            return <div>Error</div>;
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,42 @@
+@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Comic+Neue:wght@400;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: 'Fredoka', 'Comic Sans MS', sans-serif;
+}
+
+body {
+  @apply bg-slate-50 text-slate-800 overflow-hidden;
+  background-image: radial-gradient(#FFD166 1px, transparent 1px), radial-gradient(#06D6A0 1px, transparent 1px);
+  background-position: 0 0, 25px 25px;
+  background-size: 50px 50px;
+}
+
+.btn-primary {
+  @apply bg-brand text-white font-bold py-3 px-6 rounded-2xl shadow-lg 
+         hover:bg-brand-dark hover:scale-105 active:scale-95 transition-all
+         border-b-4 border-brand-dark;
+}
+
+.card-fun {
+  @apply bg-white rounded-3xl shadow-xl border-4 border-slate-100 p-6;
+}
+
+/* Custom Scrollbar for word list */
+::-webkit-scrollbar {
+  width: 10px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 5px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
