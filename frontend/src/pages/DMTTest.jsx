@@ -47,6 +47,17 @@ const DMTTest = () => {
                 }
             }
         }
+
+        // Cleanup function to stop recognition when component unmounts
+        return () => {
+            if (recognitionRef.current) {
+                try {
+                    recognitionRef.current.stop()
+                } catch (e) {
+                    // Ignore errors if already stopped
+                }
+            }
+        }
     }, [])
 
     useEffect(() => {
