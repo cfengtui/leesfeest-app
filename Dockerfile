@@ -1,15 +1,30 @@
-# Step 1: Use Python 3.11 base image
+# Use official Python base image
 FROM python:3.11-slim
 
-# Step 2: Set working directory inside container
+# Set working directory in container
 WORKDIR /app
 
-# Step 3: Copy requirements file and install dependencies
+# Copy requirements first for caching
 COPY backend/requirements.txt .
-RUN pip install --upgrade pip && pip install -r requirements.txt
 
-# Step 4: Copy all backend code
-COPY backend /app
+# Install dependencies
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Step 5: Command to start your app
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
+# Copy backend code
+COPY backend /app/backend
+
+# Copy frontend static files
+COPY frontend_portable /app/frontend_portable
+
+# Set environment variables (optional)
+ENV PYTHONUNBUFFERED=1
+ENV PORT=8000
+
+# Expose port
+EXPOSE 8000
+
+# Set working directory to backend
+WORKDIR /app/backend
+
+# Run the app using uvicorn
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
