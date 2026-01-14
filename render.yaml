@@ -1,16 +1,15 @@
 # Render.com deployment configuration (Blueprint)
 # https://render.com/docs/yaml-spec
-
 services:
   - type: web
     name: leesfeest-app
     runtime: python
-    pythonVersion: 3.11           # ✅ forces Python 3.11
+    pythonVersion: 3.11
     buildCommand: pip install --upgrade pip && pip install -r backend/requirements.txt
     startCommand: cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: DEEPGRAM_API_KEY
-        sync: false                # set manually in Render dashboard
+        sync: false
       - key: SECRET_KEY
         generateValue: true
     healthCheckPath: /stats
