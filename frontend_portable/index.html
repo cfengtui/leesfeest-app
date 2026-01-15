@@ -478,6 +478,18 @@
                 "huisdeur", "voetbal", "schooltas", "fietspad", "speelplaats", "werkplek",
                 "tandenborstel", "koffiemachine", "boodschappentas", "afwasmachine", "stofzuiger",
                 "zonnebril", "regenboog", "sneeuwpop", "winterjas", "zomervakantie"
+            ],
+
+            // English Words (Group 7-8 Level)
+            english: [
+                "dog", "cat", "house", "school", "book", "pen", "computer", "phone", "friend", "family",
+                "happy", "sad", "good", "bad", "big", "small", "red", "blue", "green", "yellow",
+                "mother", "father", "sister", "brother", "teacher", "student", "classroom", "playground",
+                "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
+                "January", "February", "March", "April", "May", "June", "July", "August",
+                "breakfast", "lunch", "dinner", "apple", "banana", "bread", "milk", "water",
+                "bicycle", "train", "airplane", "car", "bus", "street", "city", "country",
+                "football", "tennis", "swimming", "game", "music", "movie", "holiday", "birthday"
             ]
         };
 
@@ -1077,6 +1089,7 @@
 
 
         // =====================================================
+        // =====================================================
         // SPELLING TEST COMPONENT
         // =====================================================
         const SpellingTest = ({ setScreen, userId }) => {
@@ -1089,15 +1102,37 @@
             const [showFeedback, setShowFeedback] = useState(false);
             const [lastCorrect, setLastCorrect] = useState(null);
 
+            // New settings
+            const [language, setLanguage] = useState('nl'); // 'nl' or 'en'
+            const [selectedVoiceURI, setSelectedVoiceURI] = useState('');
+            const [voices, setVoices] = useState([]);
+
             const WORDS_PER_TEST = 10;
 
             // Initialize voices on mount
             useEffect(() => {
-                // Load voices (needed for some browsers)
-                speechSynthesis.getVoices();
-                const loadVoices = () => speechSynthesis.getVoices();
-                speechSynthesis.onvoiceschanged = loadVoices;
-            }, []);
+                const updateVoices = () => {
+                    const allVoices = speechSynthesis.getVoices();
+                    // Filter for useful voices based on selected language
+                    const langCode = language === 'nl' ? 'nl' : 'en';
+                    const filtered = allVoices.filter(v => v.lang.startsWith(langCode));
+                    setVoices(filtered);
+
+                    // Set default voice if none selected or current mismatch
+                    if (filtered.length > 0) {
+                        const current = filtered.find(v => v.voiceURI === selectedVoiceURI);
+                        if (!current) {
+                            // Try to find a good default (Google or Microsoft)
+                            const best = filtered.find(v => v.name.includes('Google') || v.name.includes('Microsoft')) || filtered[0];
+                            setSelectedVoiceURI(best.voiceURI);
+                        }
+                    }
+                };
+
+                speechSynthesis.onvoiceschanged = updateVoices;
+                updateVoices(); // calling immediately in case voices are already loaded
+
+            }, [language]); // Re-run when language changes
 
             const startTest = () => {
                 const categoryWords = SPELLING_WORDS[category] || [];
@@ -1107,6 +1142,20 @@
                 setResults([]);
                 setUserInput('');
                 setPhase('testing');
+            };
+
+            const speakWord = (word) => {
+                speechSynthesis.cancel();
+                const utterance = new SpeechSynthesisUtterance(word);
+                utterance.lang = language === 'nl' ? 'nl-NL' : 'en-US';
+                utterance.rate = 0.85;
+
+                if (selectedVoiceURI) {
+                    const voice = speechSynthesis.getVoices().find(v => v.voiceURI === selectedVoiceURI);
+                    if (voice) utterance.voice = voice;
+                }
+
+                speechSynthesis.speak(utterance);
             };
 
             const playCurrentWord = () => {
@@ -1163,7 +1212,8 @@
                         date: new Date().toISOString(),
                         score: score,
                         total: words.length,
-                        category: category
+                        category: category,
+                        language: language
                     };
 
                     try {
@@ -1180,24 +1230,56 @@
 
             // Category options
             const categories = [
-                { key: 'basiswoorden', label: 'Basiswoorden (Groep 3-4)', color: '#06D6A0' },
-                { key: 'werkwoorden', label: 'Werkwoorden d/t/dt (Groep 5-6)', color: '#118AB2' },
-                { key: 'kofschip', label: "'t Kofschip (Groep 6-7)", color: '#FFD166' },
-                { key: 'verdubbeling', label: 'Verdubbeling (Groep 5-6)', color: '#EF476F' },
-                { key: 'openGesloten', label: 'Open/Gesloten (Groep 6-7)', color: '#073B4C' },
-                { key: 'moeilijk', label: 'Moeilijke woorden (Groep 7-8)', color: '#9B59B6' },
-                { key: 'samenstellingen', label: 'Samenstellingen (Groep 7-8)', color: '#E74C3C' }
+                { key: 'basiswoorden', label: 'Basiswoorden (Groep 3-4)', color: '#06D6A0', lang: 'nl' },
+                { key: 'werkwoorden', label: 'Werkwoorden d/t/dt (Groep 5-6)', color: '#118AB2', lang: 'nl' },
+                { key: 'kofschip', label: "'t Kofschip (Groep 6-7)", color: '#FFD166', lang: 'nl' },
+                { key: 'verdubbeling', label: 'Verdubbeling (Groep 5-6)', color: '#EF476F', lang: 'nl' },
+                { key: 'openGesloten', label: 'Open/Gesloten (Groep 6-7)', color: '#073B4C', lang: 'nl' },
+                { key: 'moeilijk', label: 'Moeilijke woorden (Groep 7-8)', color: '#9B59B6', lang: 'nl' },
+                { key: 'samenstellingen', label: 'Samenstellingen (Groep 7-8)', color: '#E74C3C', lang: 'nl' },
+                { key: 'english', label: 'English Words (Group 7-8)', color: '#34495E', lang: 'en' }
             ];
+
+            const filteredCategories = categories.filter(c => c.lang === language);
 
             if (phase === 'intro') return (
                 <div className="min-h-screen flex flex-col items-center justify-center p-4 text-center">
                     <h1 className="text-4xl font-black text-slate-800 mb-4">📝 Spelling Dictee</h1>
-                    <p className="text-slate-500 mb-8 max-w-md">Luister naar het woord en typ het correct. Je krijgt {WORDS_PER_TEST} woorden.</p>
+                    <p className="text-slate-500 mb-8 max-w-md">Kies een taal en categorie. Je krijgt {WORDS_PER_TEST} woorden.</p>
 
-                    <div className="w-full max-w-md mb-8">
+                    <div className="flex gap-4 mb-6 bg-white p-2 rounded-xl shadow-sm border border-slate-200">
+                        <button
+                            onClick={() => { setLanguage('nl'); setCategory('basiswoorden'); }}
+                            className={`px-6 py-2 rounded-lg font-bold transition-all ${language === 'nl' ? 'bg-[#FFD166] text-slate-900' : 'text-slate-400 hover:bg-slate-50'}`}
+                        >
+                            🇳🇱 Nederlands
+                        </button>
+                        <button
+                            onClick={() => { setLanguage('en'); setCategory('english'); }}
+                            className={`px-6 py-2 rounded-lg font-bold transition-all ${language === 'en' ? 'bg-[#34495E] text-white' : 'text-slate-400 hover:bg-slate-50'}`}
+                        >
+                            🇬🇧 English
+                        </button>
+                    </div>
+
+                    <div className="w-full max-w-md mb-6">
+                        <label className="block text-left text-slate-600 font-bold mb-2">Kies een voorlezer:</label>
+                        <select
+                            value={selectedVoiceURI}
+                            onChange={e => setSelectedVoiceURI(e.target.value)}
+                            className="w-full p-3 rounded-xl border-2 border-slate-200 mb-4"
+                        >
+                            {voices.map(v => (
+                                <option key={v.voiceURI} value={v.voiceURI}>
+                                    {v.name}
+                                </option>
+                            ))}
+                            {voices.length === 0 && <option>Geen stemmen gevonden...</option>}
+                        </select>
+
                         <label className="block text-left text-slate-600 font-bold mb-2">Kies een categorie:</label>
-                        <div className="space-y-2">
-                            {categories.map(cat => (
+                        <div className="space-y-2 h-64 overflow-y-auto pr-2">
+                            {filteredCategories.map(cat => (
                                 <div
                                     key={cat.key}
                                     onClick={() => setCategory(cat.key)}
@@ -1254,9 +1336,9 @@
                                 disabled={showFeedback}
                                 className="bg-[#118AB2] text-white font-bold text-xl py-4 px-8 rounded-2xl hover:scale-105 transition-all disabled:opacity-50"
                             >
-                                🔊 Luister naar het woord
+                                🔊 Luister opnieuw
                             </button>
-                            <p className="text-slate-400 text-sm mt-4">Klik om het woord opnieuw te horen</p>
+                            {/* <p className="text-slate-400 text-sm mt-4">Stem: {voices.find(v=>v.voiceURI===selectedVoiceURI)?.name || 'Default'}</p> */}
                         </div>
 
                         {/* Input */}
@@ -1280,8 +1362,12 @@
                                         value={userInput}
                                         onChange={(e) => setUserInput(e.target.value)}
                                         onKeyPress={handleKeyPress}
-                                        placeholder="Typ het woord hier..."
+                                        placeholder={language === 'nl' ? "Typ hier..." : "Type here..."}
                                         autoFocus
+                                        autoComplete="off"
+                                        autoCorrect="off"
+                                        autoCapitalize="off"
+                                        spellCheck="false"
                                         className="w-full p-4 text-2xl text-center border-2 border-slate-200 rounded-xl focus:border-[#118AB2] focus:outline-none"
                                     />
                                     <button
@@ -1289,7 +1375,7 @@
                                         disabled={!userInput.trim()}
                                         className="w-full mt-4 bg-[#FFD166] text-slate-800 font-bold py-4 rounded-xl hover:scale-[1.02] transition-all disabled:opacity-50"
                                     >
-                                        Controleer ↵
+                                        Check ↵
                                     </button>
                                 </>
                             )}
