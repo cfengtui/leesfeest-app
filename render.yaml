@@ -14,6 +14,8 @@ services:
         generateValue: true
       - key: DATABASE_URL
         value: sqlite:////data/dmt.db
+      - key: ALLOWED_ORIGINS
+        value: https://leesfeest-app.onrender.com
     disk:
       name: dmt_data
       mountPath: /data

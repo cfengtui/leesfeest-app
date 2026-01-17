@@ -3,10 +3,17 @@ from typing import Optional
 from jose import jwt
 from passlib.context import CryptContext
 
-# Configuration (Move to env vars in production)
-SECRET_KEY = "CHANGE_THIS_IN_PRODUCTION_SECRET_KEY"
+import os
+
+# Configuration - Read from environment variables
+SECRET_KEY = os.environ.get("SECRET_KEY")
+if not SECRET_KEY:
+    import warnings
+    warnings.warn("SECRET_KEY not set! Using insecure default for development only.")
+    SECRET_KEY = "dev-only-insecure-key-change-in-production"
+
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 300000 # Long expiry for prototype
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.environ.get("ACCESS_TOKEN_EXPIRE_MINUTES", "10080"))  # Default 7 days
 
 # Use pbkdf2_sha256 instead of bcrypt to avoid compatibility issues
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")

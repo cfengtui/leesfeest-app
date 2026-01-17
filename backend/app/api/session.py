@@ -65,7 +65,11 @@ def get_user_sessions(
 
 @router.get("/user/{user_id}", response_model=list[SessionRead])
 def get_sessions_for_user(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    # Only allow if teacher/admin or self? For now open within auth
+    """Get sessions for a specific user (self, teacher, or admin only)"""
+    # Check authorization: must be self, teacher, or admin
+    if current_user.id != user_id and current_user.role not in ["admin", "teacher"]:
+        raise HTTPException(status_code=403, detail="Not authorized to view other users' sessions")
+    
     sessions = (
         db.query(ReadingSession)
         .filter(ReadingSession.user_id == user_id)

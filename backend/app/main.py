@@ -8,12 +8,19 @@ import time
 from collections import deque
 from app.models import User, ReadingSession, Word
 
+import os
+
 app = FastAPI(title="Leesfeest - Technisch Lezen & Spelling")
 
-# Add CORS middleware
+# CORS configuration - read allowed origins from environment
+ALLOWED_ORIGINS = os.environ.get("ALLOWED_ORIGINS", "").split(",")
+if not ALLOWED_ORIGINS or ALLOWED_ORIGINS == [""]:
+    # Development fallback
+    ALLOWED_ORIGINS = ["http://localhost:3000", "http://localhost:5173", "http://localhost:8000"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify exact origins
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
