@@ -24,6 +24,8 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <!-- Confetti -->
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.0/dist/confetti.browser.min.js"></script>
+    <!-- Expanded Spelling Vocabulary -->
+    <script src="spelling_words.js"></script>
 </head>
 
 <body class="bg-slate-50 text-slate-800">
@@ -421,77 +423,7 @@
         // SPELLING TEST - CITO Style Dictee
         // =====================================================
 
-        // Spelling word categories based on CITO curriculum
-        const SPELLING_WORDS = {
-            // Groep 3-4: Basiswoorden (simple phonetic)
-            basiswoorden: [
-                "boom", "huis", "fiets", "auto", "school", "tafel", "stoel", "deur", "raam", "boek",
-                "pen", "tas", "bal", "kat", "hond", "vis", "muis", "vogel", "bloem", "boom",
-                "zon", "maan", "ster", "wolk", "regen", "sneeuw", "wind", "water", "vuur", "aarde",
-                "moeder", "vader", "kind", "baby", "oma", "opa", "broer", "zus", "vriend", "buur",
-                "brood", "melk", "kaas", "appel", "peer", "banaan", "koek", "soep", "thee", "sap",
-                "bed", "lamp", "klok", "telefoon", "computer", "radio", "televisie", "foto", "spiegel", "kast"
-            ],
-
-            // Groep 5-6: Werkwoorden (verb conjugations d/t/dt)
-            werkwoorden: [
-                "werkt", "loopt", "wordt", "leest", "schrijft", "speelt", "rent", "springt", "zit", "staat",
-                "slaapt", "eet", "drinkt", "kookt", "bakt", "wast", "veegt", "maakt", "breekt", "valt",
-                "hij werkt", "zij loopt", "het wordt", "ik lees", "jij schrijft", "wij spelen", "zij rennen",
-                "vindt", "houdt", "rijdt", "snijdt", "lijdt", "glijdt", "strijdt",
-                "antwoordt", "bloedt", "eindigt", "goedt", "handelt", "landden", "redt", "smedt"
-            ],
-
-            // Groep 6-7: 't Kofschip verleden tijd
-            kofschip: [
-                "werkte", "maakte", "fietste", "hoopte", "danste", "prakte", "kookte", "bakte", "waste", "poeste",
-                "leefde", "reisde", "probeerde", "verhuisde", "antwoordde", "landde", "brandde", "handelde",
-                "gewerkt", "gemaakt", "gefietst", "gehoopt", "gedanst", "geprobeerd", "verhuisd", "geland",
-                "ik werkte", "hij maakte", "zij fietste", "wij hoopten", "zij dansten"
-            ],
-
-            // Groep 5-6: Verdubbeling (double consonants)
-            verdubbeling: [
-                "bakker", "bakken", "bellen", "belle", "lekker", "dikker", "dapper", "pepper",
-                "rennen", "winner", "zwemmer", "kapper", "stoppen", "happen", "lappen", "knappen",
-                "bommen", "tommen", "kommen", "zonnen", "kunnen", "gunnen", "mennen", "hennen",
-                "botten", "katten", "ratten", "matten", "petten", "netten", "wetten", "zetten"
-            ],
-
-            // Groep 6-7: Open/gesloten lettergrepen
-            openGesloten: [
-                "bomen", "bommen", "lopen", "loppen", "maten", "matten", "noten", "notten",
-                "peren", "perren", "ramen", "rammen", "taken", "takken", "weken", "wekken",
-                "maken", "pakken", "halen", "vallen", "praten", "ratten", "slapen", "klappen"
-            ],
-
-            // Groep 7-8: Moeilijke woorden
-            moeilijk: [
-                "onmiddellijk", "waarschijnlijk", "noodzakelijk", "verantwoordelijk", "onafhankelijk",
-                "eigenlijk", "natuurlijk", "plotseling", "uiteindelijk", "tegenwoordig",
-                "belangrijk", "verschrikkelijk", "buitengewoon", "ongelooflijk", "fantastisch",
-                "misschien", "tenminste", "bovendien", "ondertussen", "desondanks"
-            ],
-
-            // Groep 7-8: Samenstellingen (compound words)
-            samenstellingen: [
-                "huisdeur", "voetbal", "schooltas", "fietspad", "speelplaats", "werkplek",
-                "tandenborstel", "koffiemachine", "boodschappentas", "afwasmachine", "stofzuiger",
-                "zonnebril", "regenboog", "sneeuwpop", "winterjas", "zomervakantie"
-            ],
-
-            // English Words (Group 7-8 Level)
-            english: [
-                "dog", "cat", "house", "school", "book", "pen", "computer", "phone", "friend", "family",
-                "happy", "sad", "good", "bad", "big", "small", "red", "blue", "green", "yellow",
-                "mother", "father", "sister", "brother", "teacher", "student", "classroom", "playground",
-                "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
-                "January", "February", "March", "April", "May", "June", "July", "August",
-                "breakfast", "lunch", "dinner", "apple", "banana", "bread", "milk", "water",
-                "bicycle", "train", "airplane", "car", "bus", "street", "city", "country",
-                "football", "tennis", "swimming", "game", "music", "movie", "holiday", "birthday"
-            ]
-        };
+        // SPELLING_WORDS is now loaded from spelling_words.js (external file)
 
         // Get all spelling words as flat array
         function getAllSpellingWords() {
@@ -1290,7 +1222,6 @@
                                     style={{ borderLeftWidth: '6px', borderLeftColor: cat.color }}
                                 >
                                     <span className="font-bold">{cat.label}</span>
-                                    <span className="text-slate-400 text-sm ml-2">({SPELLING_WORDS[cat.key]?.length || 0} woorden)</span>
                                 </div>
                             ))}
                         </div>
