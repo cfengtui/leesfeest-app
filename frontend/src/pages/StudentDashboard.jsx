@@ -1,7 +1,7 @@
 import React from 'react'
 import { useAuth } from '../context/AuthContext'
 import { motion } from 'framer-motion'
-import { Play, FileText, CheckCircle } from 'lucide-react'
+import { Play, FileText, CheckCircle, Settings } from 'lucide-react'
 
 const StudentDashboard = () => {
     const [history, setHistory] = React.useState([])
@@ -33,9 +33,18 @@ const StudentDashboard = () => {
                         <p className="text-slate-500 font-bold">Groep {user?.school_group}</p>
                     </div>
                 </div>
-                <button onClick={logout} className="text-slate-400 font-bold hover:text-red-500">
-                    Uitloggen
-                </button>
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={() => window.location.href = '/settings'}
+                        className="p-2 rounded-xl bg-white shadow-md hover:bg-slate-100 transition-colors"
+                        title="Instellingen"
+                    >
+                        <Settings size={24} className="text-slate-500" />
+                    </button>
+                    <button onClick={logout} className="text-slate-400 font-bold hover:text-red-500">
+                        Uitloggen
+                    </button>
+                </div>
             </header>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto mb-12">

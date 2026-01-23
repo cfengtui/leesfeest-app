@@ -4,6 +4,7 @@ import Login from './pages/Login'
 import Register from './pages/Register'
 import StudentDashboard from './pages/StudentDashboard'
 import DMTTest from './pages/DMTTest'
+import Settings from './pages/Settings'
 
 const PrivateRoute = ({ children }) => {
     const { user, loading } = useAuth()
@@ -26,6 +27,11 @@ function App() {
             <Route path="/test" element={
                 <PrivateRoute>
                     <DMTTest />
+                </PrivateRoute>
+            } />
+            <Route path="/settings" element={
+                <PrivateRoute>
+                    <Settings />
                 </PrivateRoute>
             } />
             <Route path="/" element={<Navigate to="/dashboard" />} />
