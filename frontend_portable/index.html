@@ -34,6 +34,16 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
+        // --- SETTINGS STATE (localStorage) ---
+        const getSettings = () => {
+            try {
+                return JSON.parse(localStorage.getItem('dmt_settings') || '{}');
+            } catch { return {}; }
+        };
+        const saveSettings = (settings) => {
+            localStorage.setItem('dmt_settings', JSON.stringify(settings));
+        };
+
         // --- AUTH API HELPERS ---
         // Use empty string for API_BASE since frontend is served from the same origin as the backend
         // This ensures API calls work both locally and in production (Render deployment)
@@ -416,7 +426,7 @@
         function generateWordList(level) {
             const pool = WORD_POOLS[level] || WORD_POOLS[1];
             const shuffled = [...pool].sort(() => 0.5 - Math.random());
-            return shuffled.slice(0, 120);
+            return shuffled.slice(0, 10); // Only 10 words per card for focused testing
         }
 
         // =====================================================
@@ -549,12 +559,18 @@
         };
 
         const RegisterScreen = ({ setScreen }) => {
-            const [form, setForm] = useState({ name: '', email: '', password: '', group: 3 });
+            const [form, setForm] = useState({ name: '', email: '', password: '', group: 3, parentalConsent: false });
             const [err, setErr] = useState('');
             const doRegister = async (e) => {
                 e.preventDefault();
+                if (!form.parentalConsent) {
+                    setErr('Ouderlijke toestemming is verplicht');
+                    return;
+                }
                 try {
                     await register(form.name, form.email, form.password, form.group);
+                    // Save consent timestamp
+                    saveSettings({ ...getSettings(), parentalConsentAt: new Date().toISOString() });
                     setScreen('login');
                 } catch (e) { setErr(e.message); }
             };
@@ -570,6 +586,23 @@
                             <select className="w-full p-3 border-2 rounded-xl" onChange={e => setForm({ ...form, group: e.target.value })}>
                                 {[3, 4, 5, 6, 7, 8].map(g => <option key={g} value={g}>Groep {g}</option>)}
                             </select>
+
+                            {/* Parental Consent */}
+                            <div className="bg-amber-50 p-4 rounded-xl border border-amber-200">
+                                <label className="flex items-start gap-3 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={form.parentalConsent}
+                                        onChange={e => setForm({ ...form, parentalConsent: e.target.checked })}
+                                        className="mt-1 w-5 h-5"
+                                    />
+                                    <span className="text-sm text-amber-800">
+                                        <strong>Ouderlijke toestemming (verplicht)</strong><br />
+                                        Ik ben de ouder/voogd en geef toestemming voor het verwerken van gegevens conform het <a href="/privacy.html" target="_blank" className="underline text-amber-600">privacybeleid</a>.
+                                    </span>
+                                </label>
+                            </div>
+
                             <button type="submit" className="w-full bg-[#FFD166] text-slate-800 font-black py-4 rounded-xl text-xl hover:scale-105 transition">Aanmaken</button>
                         </form>
                         <p className="mt-4 text-center text-slate-500 cursor-pointer hover:underline" onClick={() => setScreen('login')}>Terug naar inloggen</p>
@@ -755,17 +788,95 @@
 
         const Dashboard = ({ user, setScreen, setUser }) => {
             const [history, setHistory] = useState([]);
+            const [showSettings, setShowSettings] = useState(false);
+            const [settings, setSettingsState] = useState(getSettings());
+
             useEffect(() => { getHistory().then(setHistory); }, []);
+
             const logout = () => { localStorage.removeItem('dmt_token'); setUser(null); setScreen('login'); };
+
+            const updateSetting = (key, value) => {
+                const newSettings = { ...settings, [key]: value };
+                if (key === 'scoringMode' && value === 'auto' && !settings.deepgramConsent) {
+                    // Can't enable auto without consent
+                    return;
+                }
+                if (key === 'deepgramConsent') {
+                    newSettings.consentTimestamp = value ? new Date().toISOString() : null;
+                    if (!value) newSettings.scoringMode = 'manual';
+                }
+                setSettingsState(newSettings);
+                saveSettings(newSettings);
+            };
+
             return (
                 <div className="min-h-screen p-6 max-w-4xl mx-auto">
-                    <header className="flex justify-between items-center mb-12">
+                    <header className="flex justify-between items-center mb-8">
                         <div>
                             <h1 className="text-3xl font-black text-slate-800">Hallo, {user.name}!</h1>
                             <p className="text-slate-500 font-bold">Groep {user.school_group}</p>
                         </div>
-                        <button onClick={logout} className="text-slate-400 font-bold hover:text-red-500">Uitloggen</button>
+                        <div className="flex items-center gap-3">
+                            <button onClick={() => setShowSettings(!showSettings)} className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200" title="Instellingen">⚙️</button>
+                            <button onClick={logout} className="text-slate-400 font-bold hover:text-red-500">Uitloggen</button>
+                        </div>
                     </header>
+
+                    {/* Settings Panel */}
+                    {showSettings && (
+                        <div className="bg-white p-6 rounded-2xl shadow-lg mb-8 border-l-4 border-[#118AB2]">
+                            <h3 className="text-xl font-bold text-slate-700 mb-4">⚙️ Instellingen</h3>
+
+                            {/* Scoring Mode */}
+                            <div className="mb-6">
+                                <h4 className="font-bold text-slate-600 mb-2">Scoringsmodus</h4>
+                                <div className="flex gap-3">
+                                    <button
+                                        onClick={() => updateSetting('scoringMode', 'manual')}
+                                        className={`flex-1 p-3 rounded-xl border-2 font-bold transition-all ${settings.scoringMode !== 'auto' ? 'border-[#06D6A0] bg-green-50 text-green-700' : 'border-slate-200 text-slate-500'}`}
+                                    >
+                                        👋 Handmatig
+                                        <p className="text-xs font-normal mt-1">Ouder/leerkracht telt score</p>
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            if (!settings.deepgramConsent) {
+                                                alert('Geef eerst toestemming voor spraakverwerking');
+                                            } else {
+                                                updateSetting('scoringMode', 'auto');
+                                            }
+                                        }}
+                                        className={`flex-1 p-3 rounded-xl border-2 font-bold transition-all ${settings.scoringMode === 'auto' ? 'border-[#06D6A0] bg-green-50 text-green-700' : 'border-slate-200 text-slate-500'}`}
+                                    >
+                                        🎤 Automatisch
+                                        <p className="text-xs font-normal mt-1">Spraakherkenning</p>
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Deepgram Consent */}
+                            <div className="bg-amber-50 p-4 rounded-xl border border-amber-200">
+                                <label className="flex items-start gap-3 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={settings.deepgramConsent || false}
+                                        onChange={e => updateSetting('deepgramConsent', e.target.checked)}
+                                        className="mt-1 w-5 h-5"
+                                    />
+                                    <span className="text-sm text-amber-800">
+                                        <strong>Toestemming spraakverwerking</strong><br />
+                                        Ik geef toestemming dat stemopnames worden verwerkt door Deepgram (VS) voor automatische scoring.<br />
+                                        {settings.consentTimestamp && <span className="text-xs text-amber-600">Gegeven op: {new Date(settings.consentTimestamp).toLocaleString('nl-NL')}</span>}
+                                    </span>
+                                </label>
+                            </div>
+
+                            <div className="mt-4 text-center">
+                                <a href="/privacy.html" target="_blank" className="text-sm text-[#118AB2] underline">Bekijk privacybeleid</a>
+                            </div>
+                        </div>
+                    )}
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
                         <div onClick={() => setScreen('test')} className="bg-white p-8 rounded-3xl shadow-xl border-l-8 border-[#06D6A0] cursor-pointer hover:scale-105 transition">
                             <h2 className="text-3xl font-black text-slate-800 mb-2">📖 Technisch Lezen</h2>
@@ -944,13 +1055,12 @@
                     <div className="space-y-4 mb-8 w-full max-w-2xl">
                         {[1, 2, 3].map(c => (
                             <div key={c} className="bg-white p-4 rounded-xl shadow">
-                                <div className="text-2xl font-bold text-slate-600 mb-2">Kaart {c}: {results[c]?.score || 0} woorden</div>
+                                <div className="text-2xl font-bold text-slate-600 mb-2">Kaart {c}: {results[c]?.score || 0} correct</div>
                                 {results[c] && (
                                     <details className="text-left">
                                         <summary className="cursor-pointer text-slate-400 text-sm hover:text-slate-600">Toon details</summary>
                                         <div className="text-xs p-2 bg-slate-50 rounded mt-2">
-                                            <p className="mb-2"><b>Gehoord ({results[c].spoken?.length || 0}):</b> {results[c].spoken?.join(', ') || '(geen)'}</p>
-                                            <p><b>Gematcht ({results[c].matched?.length || 0}):</b> {results[c].matched?.join(', ') || '(geen)'}</p>
+                                            <p><b>Gematcht:</b> {results[c].matched?.join(', ') || '(geen)'}</p>
                                         </div>
                                     </details>
                                 )}
