@@ -10,8 +10,10 @@ services:
     envVars:
       - key: DEEPGRAM_API_KEY
         sync: false
+      # IMPORTANT: SECRET_KEY must be set manually in Render dashboard
+      # Do NOT use generateValue as it changes on every deploy, breaking all JWT tokens
       - key: SECRET_KEY
-        generateValue: true
+        sync: false
       - key: DATABASE_URL
         value: sqlite:////data/dmt.db
       - key: ALLOWED_ORIGINS
