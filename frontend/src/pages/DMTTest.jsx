@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Timer, Mic, Square, Hand, Check, X, Settings } from 'lucide-react'
+import { Timer, Mic, Square, Hand, Check, X, Settings, ArrowLeft, BookOpen, Star } from 'lucide-react'
 import confetti from 'canvas-confetti'
 import { useSettings } from '../context/SettingsContext'
+import Decorations from '../components/Decorations'
 
 // Use environment variable for API base URL, fallback to relative URL for production
 const API_BASE = import.meta.env.VITE_API_URL || '';
@@ -126,7 +127,11 @@ const DMTTest = () => {
             setWordStates({})
         } else {
             setPhase('finished')
-            confetti()
+            confetti({
+                particleCount: 150,
+                spread: 100,
+                origin: { y: 0.6 }
+            })
             saveResults({ ...results, [currentCard]: score })
         }
     }
@@ -184,198 +189,295 @@ const DMTTest = () => {
         const correctCount = Object.values(wordStates).filter(s => s === 'correct').length
 
         return (
-            <div className="min-h-screen bg-slate-50 flex flex-col">
-                <div className="bg-white p-4 shadow-sm flex justify-between items-center">
-                    <h2 className="text-xl font-bold text-slate-700">Kaart {currentCard} - Score invoeren</h2>
-                    <div className="flex items-center gap-2 bg-green-100 px-4 py-2 rounded-lg">
-                        <Hand className="text-green-600" size={20} />
-                        <span className="text-green-700 font-bold">Handmatig</span>
+            <div className="min-h-screen bg-gradient-to-b from-indigo-100 via-purple-50 to-pink-50 relative">
+                <Decorations />
+                <div className="relative z-10">
+                    {/* Header */}
+                    <div className="bg-white/90 backdrop-blur p-4 shadow-sm flex justify-between items-center">
+                        <h2 className="text-xl font-bold text-primary-dark">Kaart {currentCard} - Score invoeren</h2>
+                        <div className="flex items-center gap-2 bg-amber-100 px-4 py-2 rounded-full">
+                            <Hand className="text-amber-600" size={18} />
+                            <span className="text-amber-700 font-bold text-sm">Handmatig</span>
+                        </div>
                     </div>
-                </div>
 
-                <div className="flex-1 p-6 max-w-4xl mx-auto w-full">
-                    <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
-                        <h3 className="text-lg font-bold text-slate-700 mb-4">
-                            Tik op elk woord dat correct is gelezen:
-                        </h3>
-                        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
-                            {currentWords.map((word, i) => (
-                                <button
-                                    key={i}
-                                    onClick={() => toggleWordState(i)}
-                                    className={`p-3 rounded-xl border-2 font-bold text-lg transition-all ${wordStates[i] === 'correct'
-                                            ? 'bg-green-500 border-green-600 text-white'
+                    <div className="p-6 max-w-2xl mx-auto">
+                        {/* Word toggle grid */}
+                        <div className="bg-white/90 backdrop-blur rounded-3xl shadow-xl p-6 mb-6">
+                            <h3 className="text-lg font-bold text-gray-700 mb-4 flex items-center gap-2">
+                                <span>👆</span> Tik op elk correct gelezen woord:
+                            </h3>
+                            <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                                {currentWords.map((word, i) => (
+                                    <motion.button
+                                        key={i}
+                                        whileTap={{ scale: 0.95 }}
+                                        onClick={() => toggleWordState(i)}
+                                        className={`p-3 rounded-xl border-2 font-bold text-lg transition-all ${wordStates[i] === 'correct'
+                                            ? 'bg-green-500 border-green-600 text-white shadow-lg'
                                             : wordStates[i] === 'incorrect'
-                                                ? 'bg-red-500 border-red-600 text-white'
-                                                : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-slate-300'
-                                        }`}
-                                >
-                                    <span className="flex items-center justify-center gap-1">
-                                        {wordStates[i] === 'correct' && <Check size={16} />}
-                                        {wordStates[i] === 'incorrect' && <X size={16} />}
-                                        {word}
-                                    </span>
-                                </button>
-                            ))}
+                                                ? 'bg-red-400 border-red-500 text-white'
+                                                : 'bg-white border-gray-200 text-gray-700 hover:border-primary/50 hover:bg-primary/5'
+                                            }`}
+                                    >
+                                        <span className="flex items-center justify-center gap-1">
+                                            {wordStates[i] === 'correct' && <Check size={16} />}
+                                            {wordStates[i] === 'incorrect' && <X size={16} />}
+                                            {word}
+                                        </span>
+                                    </motion.button>
+                                ))}
+                            </div>
                         </div>
-                    </div>
 
-                    <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
-                        <h3 className="text-lg font-bold text-slate-700 mb-4">
-                            Of voer het aantal correct gelezen woorden in:
-                        </h3>
-                        <input
-                            type="number"
-                            min="0"
-                            max={currentWords.length}
-                            value={manualScore}
-                            onChange={(e) => setManualScore(e.target.value)}
-                            placeholder="Aantal correct"
-                            className="w-full p-4 text-2xl font-bold text-center border-2 border-slate-200 rounded-xl focus:border-brand focus:outline-none"
-                        />
-                    </div>
-
-                    <div className="flex gap-4">
-                        <div className="flex-1 bg-brand-light rounded-xl p-4 text-center">
-                            <p className="text-sm text-brand-dark font-bold">Geselecteerd correct</p>
-                            <p className="text-3xl font-black text-brand">{correctCount}</p>
+                        {/* Number input alternative */}
+                        <div className="bg-white/90 backdrop-blur rounded-2xl shadow-lg p-5 mb-6">
+                            <h3 className="text-md font-bold text-gray-600 mb-3">
+                                Of voer een getal in:
+                            </h3>
+                            <input
+                                type="number"
+                                min="0"
+                                max={currentWords.length}
+                                value={manualScore}
+                                onChange={(e) => setManualScore(e.target.value)}
+                                placeholder="Aantal correct"
+                                className="w-full p-4 text-2xl font-bold text-center border-2 border-gray-200 rounded-xl focus:border-primary focus:outline-none"
+                            />
                         </div>
-                        <button
-                            onClick={submitManualScore}
-                            className="flex-1 bg-brand text-white rounded-xl p-4 font-black text-xl hover:bg-brand-dark transition-colors"
-                        >
-                            Bevestigen →
-                        </button>
+
+                        {/* Submit section */}
+                        <div className="flex gap-4">
+                            <div className="flex-1 bg-green-100 rounded-2xl p-4 text-center">
+                                <p className="text-sm text-green-700 font-bold">Correct</p>
+                                <p className="text-4xl font-black text-green-600">{correctCount}</p>
+                            </div>
+                            <motion.button
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
+                                onClick={submitManualScore}
+                                className="flex-1 bg-gradient-to-r from-primary to-primary-dark text-white rounded-2xl p-4 font-black text-xl shadow-lg"
+                            >
+                                Volgende →
+                            </motion.button>
+                        </div>
                     </div>
                 </div>
             </div>
         )
     }
 
+    // Finished phase
     if (phase === 'finished') {
+        const totalScore = Object.values(results).reduce((a, b) => a + b, 0)
+
         return (
-            <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-6 text-center">
-                <h1 className="text-5xl font-black text-brand-dark mb-8">Toets Voltooid!</h1>
-                <div className="grid grid-cols-3 gap-6 mb-8 w-full max-w-2xl">
-                    {[1, 2, 3].map(card => (
-                        <div key={card} className="bg-white p-6 rounded-2xl shadow-lg border-b-4 border-slate-200">
-                            <h3 className="text-xl font-bold text-slate-500 mb-2">Kaart {card}</h3>
-                            <p className="text-4xl font-black text-brand">{results[card] || 0}</p>
-                            <p className="text-sm text-slate-400">woorden</p>
+            <div className="min-h-screen bg-gradient-to-b from-indigo-100 via-purple-50 to-pink-50 relative">
+                <Decorations />
+                <div className="relative z-10 flex flex-col items-center justify-center min-h-screen p-6 text-center">
+                    {/* Celebration header */}
+                    <motion.div
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        className="mb-6"
+                    >
+                        <span className="text-7xl">🎉</span>
+                    </motion.div>
+
+                    <h1 className="text-4xl font-black text-primary-dark mb-2">Geweldig gedaan!</h1>
+                    <p className="text-gray-500 mb-8">Je hebt de toets afgerond</p>
+
+                    {/* Score cards */}
+                    <div className="grid grid-cols-3 gap-4 mb-6 w-full max-w-md">
+                        {[1, 2, 3].map(card => (
+                            <motion.div
+                                key={card}
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: card * 0.2 }}
+                                className="bg-white/90 backdrop-blur p-4 rounded-2xl shadow-lg"
+                            >
+                                <p className="text-sm text-gray-400 font-bold">Kaart {card}</p>
+                                <p className="text-3xl font-black text-primary">{results[card] || 0}</p>
+                            </motion.div>
+                        ))}
+                    </div>
+
+                    {/* Total score */}
+                    <div className="bg-gradient-to-r from-yellow-400 to-amber-400 text-amber-900 px-8 py-4 rounded-2xl shadow-lg mb-6">
+                        <div className="flex items-center gap-3">
+                            <Star size={28} className="fill-amber-900" />
+                            <div>
+                                <p className="text-sm font-bold opacity-80">Totaal</p>
+                                <p className="text-3xl font-black">{totalScore} woorden</p>
+                            </div>
                         </div>
-                    ))}
+                    </div>
+
+                    {/* Mode indicator */}
+                    <div className="mb-6 px-4 py-2 bg-white/60 backdrop-blur rounded-full text-sm text-gray-500">
+                        Gescoord met: {isManualMode ? '👋 Handmatig' : '🎤 Automatisch'}
+                    </div>
+
+                    {/* Back button */}
+                    <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => window.location.href = '/dashboard'}
+                        className="bg-gradient-to-r from-primary to-primary-dark text-white px-8 py-4 rounded-2xl font-black text-xl shadow-lg flex items-center gap-3"
+                    >
+                        <ArrowLeft size={24} />
+                        Terug naar Dashboard
+                    </motion.button>
                 </div>
-                <div className="mb-4 px-4 py-2 bg-slate-100 rounded-lg text-sm text-slate-500">
-                    Gescoord met: {isManualMode ? '👋 Handmatig' : '🎤 Automatisch'}
-                </div>
-                <button
-                    onClick={() => window.location.href = '/dashboard'}
-                    className="bg-brand text-white px-8 py-3 rounded-xl font-black text-xl hover:bg-brand-dark transition-colors"
-                >
-                    Terug naar Dashboard
-                </button>
             </div>
         )
     }
 
+    // Main test view (intro and testing phases)
     return (
-        <div className="min-h-screen bg-slate-50 flex flex-col">
-            {/* Header */}
-            <div className="bg-white p-4 shadow-sm flex justify-between items-center">
-                <div className="flex items-center gap-4">
-                    <h2 className="text-xl font-bold text-slate-700">DMT Toets - Kaart {currentCard}</h2>
-                    {isManualMode ? (
-                        <span className="flex items-center gap-1 bg-amber-100 text-amber-700 px-3 py-1 rounded-full text-sm font-bold">
-                            <Hand size={14} /> Handmatig
-                        </span>
+        <div className="min-h-screen bg-gradient-to-b from-indigo-100 via-purple-50 to-pink-50 relative">
+            <Decorations />
+
+            <div className="relative z-10 flex flex-col min-h-screen">
+                {/* Header */}
+                <div className="bg-white/90 backdrop-blur p-4 shadow-sm flex justify-between items-center">
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={() => window.location.href = '/dashboard'}
+                            className="p-2 rounded-xl bg-gray-100 hover:bg-gray-200 transition-colors"
+                        >
+                            <ArrowLeft size={20} className="text-gray-500" />
+                        </button>
+                        <div>
+                            <h2 className="text-lg font-bold text-primary-dark">Kaart {currentCard} van 3</h2>
+                            <div className="flex gap-1">
+                                {[1, 2, 3].map(i => (
+                                    <div
+                                        key={i}
+                                        className={`h-1.5 w-8 rounded-full ${i < currentCard ? 'bg-green-400' :
+                                                i === currentCard ? 'bg-primary' : 'bg-gray-200'
+                                            }`}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                        {/* Mode badge */}
+                        {isManualMode ? (
+                            <span className="flex items-center gap-1 bg-amber-100 text-amber-700 px-3 py-1.5 rounded-full text-sm font-bold">
+                                <Hand size={14} /> Handmatig
+                            </span>
+                        ) : (
+                            <span className="flex items-center gap-1 bg-green-100 text-green-700 px-3 py-1.5 rounded-full text-sm font-bold">
+                                <Mic size={14} /> Auto
+                            </span>
+                        )}
+
+                        {/* Timer */}
+                        <div className={`flex items-center gap-2 px-4 py-2 rounded-xl font-mono font-black text-xl ${timeLeft < 10
+                                ? 'bg-red-100 text-red-600'
+                                : 'bg-primary/10 text-primary-dark'
+                            }`}>
+                            <Timer size={20} className={timeLeft < 10 ? 'animate-pulse' : ''} />
+                            {timeLeft}s
+                        </div>
+                    </div>
+                </div>
+
+                {/* Main content */}
+                <div className="flex-1 p-6 flex flex-col items-center max-w-3xl mx-auto w-full">
+                    {!isActive ? (
+                        /* Start button */
+                        <div className="flex-1 flex flex-col items-center justify-center">
+                            {isManualMode && (
+                                <div className="mb-6 bg-amber-50 border border-amber-200 rounded-2xl p-4 max-w-sm text-center">
+                                    <p className="text-amber-700 text-sm">
+                                        <strong>👋 Handmatige modus:</strong><br />
+                                        Luister naar de leerling, dan kun je aangeven welke woorden correct zijn.
+                                    </p>
+                                </div>
+                            )}
+
+                            <motion.button
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                                onClick={startCard}
+                                className="bg-gradient-to-r from-green-400 to-green-500 text-white text-2xl font-black px-12 py-6 rounded-3xl shadow-xl flex items-center gap-4 border-b-4 border-green-600"
+                            >
+                                <div className="bg-white/30 p-3 rounded-xl">
+                                    <BookOpen size={32} />
+                                </div>
+                                Start Kaart {currentCard}
+                            </motion.button>
+
+                            <p className="mt-4 text-gray-400 text-sm">
+                                {MOCK_CARDS[currentCard].length} woorden • 1 minuut
+                            </p>
+                        </div>
                     ) : (
-                        <span className="flex items-center gap-1 bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm font-bold">
-                            <Mic size={14} /> Automatisch
-                        </span>
+                        /* Word display during test */
+                        <div className="w-full bg-white/90 backdrop-blur rounded-3xl shadow-xl p-6 min-h-[400px] relative">
+                            {/* Encouragement message */}
+                            <div className="absolute top-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-green-100 text-green-700 px-4 py-2 rounded-full text-sm font-bold">
+                                <span>🐻</span> Goed bezig!
+                            </div>
+
+                            {/* Words grid */}
+                            <div className="mt-12 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-4">
+                                {MOCK_CARDS[currentCard].map((word, i) => (
+                                    <motion.div
+                                        key={i}
+                                        initial={{ opacity: 0, scale: 0.8 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        transition={{ delay: i * 0.05 }}
+                                        className="flex items-center justify-center p-4 bg-white border-2 border-primary/20 rounded-xl text-xl font-bold text-gray-800 shadow-sm"
+                                    >
+                                        {word}
+                                    </motion.div>
+                                ))}
+                            </div>
+
+                            {/* Bottom feedback */}
+                            {!isManualMode && (
+                                <div className="absolute bottom-4 left-4 right-4 bg-gray-50 p-3 rounded-xl text-center">
+                                    <p className="text-xs font-bold text-gray-400 uppercase">Ik hoorde:</p>
+                                    <p className="text-sm text-gray-600 italic h-5 overflow-hidden">{recognizedText.slice(-50)}</p>
+                                </div>
+                            )}
+
+                            {isManualMode && (
+                                <div className="absolute bottom-4 left-4 right-4 bg-amber-50 p-3 rounded-xl text-center">
+                                    <p className="text-sm font-bold text-amber-600">
+                                        🎯 Luister naar de leerling...
+                                    </p>
+                                </div>
+                            )}
+
+                            {/* Recording indicator */}
+                            {isListening && (
+                                <div className="absolute top-4 right-4">
+                                    <span className="flex h-4 w-4">
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                        <span className="relative inline-flex rounded-full h-4 w-4 bg-red-500"></span>
+                                    </span>
+                                </div>
+                            )}
+
+                            {/* Stop button */}
+                            <motion.button
+                                whileHover={{ scale: 1.1 }}
+                                whileTap={{ scale: 0.9 }}
+                                onClick={endCard}
+                                className="absolute bottom-4 right-4 bg-gray-200 hover:bg-red-100 p-3 rounded-xl text-gray-600 hover:text-red-500 transition-colors"
+                            >
+                                <Square size={24} fill="currentColor" />
+                            </motion.button>
+                        </div>
                     )}
                 </div>
-                <div className="flex items-center gap-4">
-                    <button
-                        onClick={() => window.location.href = '/settings'}
-                        className="p-2 rounded-lg hover:bg-slate-100 transition-colors"
-                        title="Instellingen"
-                    >
-                        <Settings size={20} className="text-slate-400" />
-                    </button>
-                    <div className="flex items-center gap-2 bg-slate-100 px-4 py-2 rounded-lg">
-                        <Timer className={timeLeft < 10 ? 'text-red-500 animate-pulse' : 'text-slate-500'} />
-                        <span className={`text-2xl font-mono font-black ${timeLeft < 10 ? 'text-red-500' : 'text-slate-700'}`}>
-                            {timeLeft}s
-                        </span>
-                    </div>
-                </div>
-            </div>
-
-            {/* Content */}
-            <div className="flex-1 p-6 flex flex-col items-center max-w-5xl mx-auto w-full">
-
-                {!isActive ? (
-                    <div className="flex-1 flex flex-col items-center justify-center">
-                        {isManualMode && (
-                            <div className="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4 max-w-md text-center">
-                                <p className="text-amber-700 text-sm">
-                                    <strong>Handmatige modus:</strong> Na afloop kunt u aangeven welke woorden correct zijn gelezen.
-                                </p>
-                            </div>
-                        )}
-                        <button
-                            onClick={startCard}
-                            className="bg-brand text-white text-2xl font-black px-12 py-6 rounded-2xl shadow-xl hover:scale-105 transition-transform flex items-center gap-4"
-                        >
-                            {isManualMode ? <Hand size={32} /> : <Mic size={32} />}
-                            Start Kaart {currentCard}
-                        </button>
-                    </div>
-                ) : (
-                    <div className="w-full bg-white rounded-3xl shadow-xl border-4 border-slate-200 p-8 min-h-[500px] relative overflow-hidden">
-                        <div className="grid grid-cols-4 gap-8">
-                            {MOCK_CARDS[currentCard].map((word, i) => (
-                                <motion.div
-                                    key={i}
-                                    initial={{ opacity: 0 }}
-                                    animate={{ opacity: 1 }}
-                                    transition={{ delay: i * 0.05 }}
-                                    className="col-span-1 flex items-center justify-center p-4 bg-slate-50 rounded-xl border-2 border-slate-100 text-2xl font-bold text-slate-800"
-                                >
-                                    {word}
-                                </motion.div>
-                            ))}
-                        </div>
-
-                        {/* Real-time feedback overlay (only in auto mode) */}
-                        {!isManualMode && (
-                            <div className="absolute bottom-4 left-4 right-4 bg-black/5 p-4 rounded-xl text-center">
-                                <p className="text-sm font-bold text-slate-400 uppercase">Ik hoorde:</p>
-                                <p className="text-lg text-slate-600 italic h-6 overflow-hidden">{recognizedText.slice(-50)}</p>
-                            </div>
-                        )}
-
-                        {/* Manual mode indicator */}
-                        {isManualMode && (
-                            <div className="absolute bottom-4 left-4 right-4 bg-amber-50 p-4 rounded-xl text-center">
-                                <p className="text-sm font-bold text-amber-600">
-                                    🎯 Luister naar de leerling en druk op Stop als klaar
-                                </p>
-                            </div>
-                        )}
-
-                        <div className="absolute top-4 right-4">
-                            {isListening && <span className="flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span></span>}
-                        </div>
-
-                        <button
-                            onClick={endCard}
-                            className="absolute bottom-4 right-4 bg-slate-200 hover:bg-slate-300 p-3 rounded-xl text-slate-600"
-                        >
-                            <Square fill="currentColor" />
-                        </button>
-                    </div>
-                )}
             </div>
         </div>
     )

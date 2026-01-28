@@ -12,12 +12,30 @@
             theme: {
                 extend: {
                     colors: {
-                        brand: { light: '#FFD166', DEFAULT: '#06D6A0', dark: '#118AB2', accent: '#EF476F' }
+                        brand: { light: '#FFD166', DEFAULT: '#06D6A0', dark: '#118AB2', accent: '#EF476F' },
+                        primary: { light: '#E0E7FF', DEFAULT: '#6366F1', dark: '#4F46E5' }
+                    },
+                    animation: {
+                        'float': 'float 6s ease-in-out infinite',
+                        'float-slow': 'float 8s ease-in-out 2s infinite',
+                    },
+                    keyframes: {
+                        float: {
+                            '0%, 100%': { transform: 'translateY(0px)' },
+                            '50%': { transform: 'translateY(-10px)' },
+                        }
                     }
                 }
             }
         }
     </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@300;400;500;600;700&display=swap');
+
+        body {
+            font-family: 'Fredoka', sans-serif;
+        }
+    </style>
     <!-- React & Babel -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -28,11 +46,35 @@
     <script src="spelling_words.js"></script>
 </head>
 
-<body class="bg-slate-50 text-slate-800">
+<body class="bg-gradient-to-b from-indigo-100 via-purple-50 to-pink-50 text-slate-800 min-h-screen">
     <div id="root"></div>
 
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
+
+        // --- DECORATIONS COMPONENT ---
+        const Decorations = () => (
+            <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+                {/* Floating clouds */}
+                <svg className="absolute top-10 left-10 w-24 h-16 text-white/60 animate-float" viewBox="0 0 100 60">
+                    <ellipse cx="30" cy="40" rx="25" ry="15" fill="currentColor" />
+                    <ellipse cx="55" cy="35" rx="30" ry="20" fill="currentColor" />
+                    <ellipse cx="75" cy="42" rx="20" ry="12" fill="currentColor" />
+                </svg>
+                <svg className="absolute top-20 right-20 w-32 h-20 text-white/50 animate-float-slow" viewBox="0 0 100 60">
+                    <ellipse cx="30" cy="40" rx="25" ry="15" fill="currentColor" />
+                    <ellipse cx="55" cy="35" rx="30" ry="20" fill="currentColor" />
+                    <ellipse cx="75" cy="42" rx="20" ry="12" fill="currentColor" />
+                </svg>
+                {/* Stars */}
+                <div className="absolute top-32 left-1/4 text-4xl animate-float">⭐</div>
+                <div className="absolute top-48 right-1/3 text-3xl animate-float-slow" style={{ color: '#A78BFA' }}>✦</div>
+                <div className="absolute bottom-40 left-20 text-2xl animate-float">🌟</div>
+                {/* Leaves */}
+                <div className="absolute bottom-32 right-16 text-3xl animate-float-slow">🍃</div>
+                <div className="absolute top-1/3 left-8 text-2xl animate-float">🌿</div>
+            </div>
+        );
 
         // --- SETTINGS STATE (localStorage) ---
         const getSettings = () => {
@@ -540,19 +582,48 @@
                     const user = await getMe();
                     setUser(user);
                     setScreen('dashboard');
-                } catch (e) { setErr(e.message); }
+                } catch (e) { setErr('Inloggen mislukt. Probeer Demo Mode om de app te testen.'); }
             };
+
+            // Demo mode - no backend needed
+            const startDemo = () => {
+                const demoUser = { id: 'demo', name: 'Demo Kind', email: 'demo@test.nl', school_group: 5 };
+                setUser(demoUser);
+                setScreen('dashboard');
+            };
+
             return (
-                <div className="min-h-screen flex items-center justify-center p-4">
-                    <div className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-md border-4 border-slate-100">
-                        <h1 className="text-3xl font-black text-center text-[#118AB2] mb-8">Inloggen</h1>
-                        {err && <div className="bg-red-100 text-red-700 p-3 rounded mb-4">{err}</div>}
+                <div className="min-h-screen flex items-center justify-center p-4 relative">
+                    <Decorations />
+                    <div className="bg-white/90 backdrop-blur p-8 rounded-3xl shadow-xl w-full max-w-md relative z-10">
+                        <div className="flex flex-col items-center mb-6">
+                            <div className="w-16 h-16 bg-gradient-to-br from-primary to-primary-dark rounded-2xl flex items-center justify-center mb-3 shadow-lg text-3xl">
+                                📚
+                            </div>
+                            <h1 className="text-2xl font-black text-primary-dark flex items-center gap-2">
+                                Leesfeest 🎉
+                            </h1>
+                        </div>
+
+                        {err && <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-xl mb-4 text-sm">{err}</div>}
+
                         <form onSubmit={doLogin} className="space-y-4">
-                            <input className="w-full p-3 border-2 rounded-xl" type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required />
-                            <input className="w-full p-3 border-2 rounded-xl" type="password" placeholder="Wachtwoord" value={pass} onChange={e => setPass(e.target.value)} required />
-                            <button type="submit" className="w-full bg-[#06D6A0] text-white font-black py-4 rounded-xl text-xl hover:scale-105 transition">Start!</button>
+                            <input className="w-full p-3 border-2 border-gray-200 rounded-xl focus:border-primary outline-none" type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required />
+                            <input className="w-full p-3 border-2 border-gray-200 rounded-xl focus:border-primary outline-none" type="password" placeholder="Wachtwoord" value={pass} onChange={e => setPass(e.target.value)} required />
+                            <button type="submit" className="w-full bg-gradient-to-r from-green-400 to-green-500 text-white font-black py-4 rounded-xl text-xl shadow-lg border-b-4 border-green-600 hover:scale-[1.02] transition-transform">Start! 🚀</button>
                         </form>
-                        <p className="mt-4 text-center text-slate-500 cursor-pointer hover:underline" onClick={() => setScreen('register')}>Nog geen account?</p>
+
+                        <div className="my-4 flex items-center gap-3">
+                            <hr className="flex-1 border-gray-200" />
+                            <span className="text-gray-400 text-sm">of</span>
+                            <hr className="flex-1 border-gray-200" />
+                        </div>
+
+                        <button onClick={startDemo} className="w-full bg-gradient-to-r from-primary to-primary-dark text-white font-bold py-3 rounded-xl shadow-md hover:scale-[1.02] transition-transform">
+                            🎮 Demo Mode (zonder server)
+                        </button>
+
+                        <p className="mt-4 text-center text-gray-500 cursor-pointer hover:text-primary hover:underline" onClick={() => setScreen('register')}>Nog geen account?</p>
                     </div>
                 </div>
             );
@@ -797,10 +868,7 @@
 
             const updateSetting = (key, value) => {
                 const newSettings = { ...settings, [key]: value };
-                if (key === 'scoringMode' && value === 'auto' && !settings.deepgramConsent) {
-                    // Can't enable auto without consent
-                    return;
-                }
+                if (key === 'scoringMode' && value === 'auto' && !settings.deepgramConsent) return;
                 if (key === 'deepgramConsent') {
                     newSettings.consentTimestamp = value ? new Date().toISOString() : null;
                     if (!value) newSettings.scoringMode = 'manual';
@@ -809,89 +877,135 @@
                 saveSettings(newSettings);
             };
 
+            // Calculate stats
+            const totalScore = history.reduce((sum, s) => sum + (s.correct_words || 0), 0);
+            const sessionsCount = history.length;
+            const level = totalScore < 50 ? 1 : totalScore < 150 ? 2 : totalScore < 300 ? 3 : 4;
+            const levelNames = ['Beginner', 'Lezer', 'Boekenwurm', 'Leeskampioen'];
+            const levelColors = ['bg-gray-400', 'bg-blue-400', 'bg-purple-500', 'bg-yellow-500'];
+
             return (
-                <div className="min-h-screen p-6 max-w-4xl mx-auto">
-                    <header className="flex justify-between items-center mb-8">
-                        <div>
-                            <h1 className="text-3xl font-black text-slate-800">Hallo, {user.name}!</h1>
-                            <p className="text-slate-500 font-bold">Groep {user.school_group}</p>
-                        </div>
-                        <div className="flex items-center gap-3">
-                            <button onClick={() => setShowSettings(!showSettings)} className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200" title="Instellingen">⚙️</button>
-                            <button onClick={logout} className="text-slate-400 font-bold hover:text-red-500">Uitloggen</button>
-                        </div>
-                    </header>
+                <div className="min-h-screen relative">
+                    <Decorations />
 
-                    {/* Settings Panel */}
-                    {showSettings && (
-                        <div className="bg-white p-6 rounded-2xl shadow-lg mb-8 border-l-4 border-[#118AB2]">
-                            <h3 className="text-xl font-bold text-slate-700 mb-4">⚙️ Instellingen</h3>
+                    <div className="relative z-10 pb-8">
+                        {/* Header */}
+                        <header className="pt-6 px-6 flex justify-between items-center">
+                            <h1 className="text-2xl font-black text-primary-dark flex items-center gap-2">
+                                <span>📚</span> Leesfeest <span>🎉</span>
+                            </h1>
+                            <div className="flex items-center gap-2">
+                                <button onClick={() => setShowSettings(!showSettings)} className="p-2 rounded-full bg-white/80 shadow-md hover:bg-white">⚙️</button>
+                                <button onClick={logout} className="p-2 rounded-full bg-white/80 shadow-md hover:bg-red-50 text-gray-400 hover:text-red-500">🚪</button>
+                            </div>
+                        </header>
 
-                            {/* Scoring Mode */}
-                            <div className="mb-6">
-                                <h4 className="font-bold text-slate-600 mb-2">Scoringsmodus</h4>
-                                <div className="flex gap-3">
-                                    <button
-                                        onClick={() => updateSetting('scoringMode', 'manual')}
-                                        className={`flex-1 p-3 rounded-xl border-2 font-bold transition-all ${settings.scoringMode !== 'auto' ? 'border-[#06D6A0] bg-green-50 text-green-700' : 'border-slate-200 text-slate-500'}`}
-                                    >
+                        {/* Welcome */}
+                        <div className="px-6 mt-4 text-center">
+                            <p className="text-gray-600">Welkom terug, <span className="font-bold text-primary-dark">{user.name}</span>!</p>
+                            <p className="text-sm text-gray-400">Groep {user.school_group}</p>
+                        </div>
+
+                        {/* Settings Panel */}
+                        {showSettings && (
+                            <div className="mx-6 mt-4 bg-white/95 backdrop-blur p-5 rounded-2xl shadow-lg">
+                                <h3 className="text-lg font-bold text-gray-700 mb-3">⚙️ Instellingen</h3>
+                                <div className="flex gap-2 mb-4">
+                                    <button onClick={() => updateSetting('scoringMode', 'manual')}
+                                        className={`flex-1 p-3 rounded-xl border-2 font-bold text-sm ${settings.scoringMode !== 'auto' ? 'border-green-400 bg-green-50 text-green-700' : 'border-gray-200 text-gray-500'}`}>
                                         👋 Handmatig
-                                        <p className="text-xs font-normal mt-1">Ouder/leerkracht telt score</p>
                                     </button>
-                                    <button
-                                        onClick={() => {
-                                            if (!settings.deepgramConsent) {
-                                                alert('Geef eerst toestemming voor spraakverwerking');
-                                            } else {
-                                                updateSetting('scoringMode', 'auto');
-                                            }
-                                        }}
-                                        className={`flex-1 p-3 rounded-xl border-2 font-bold transition-all ${settings.scoringMode === 'auto' ? 'border-[#06D6A0] bg-green-50 text-green-700' : 'border-slate-200 text-slate-500'}`}
-                                    >
+                                    <button onClick={() => settings.deepgramConsent ? updateSetting('scoringMode', 'auto') : alert('Geef eerst toestemming')}
+                                        className={`flex-1 p-3 rounded-xl border-2 font-bold text-sm ${settings.scoringMode === 'auto' ? 'border-green-400 bg-green-50 text-green-700' : 'border-gray-200 text-gray-500'}`}>
                                         🎤 Automatisch
-                                        <p className="text-xs font-normal mt-1">Spraakherkenning</p>
                                     </button>
                                 </div>
-                            </div>
-
-                            {/* Deepgram Consent */}
-                            <div className="bg-amber-50 p-4 rounded-xl border border-amber-200">
-                                <label className="flex items-start gap-3 cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={settings.deepgramConsent || false}
-                                        onChange={e => updateSetting('deepgramConsent', e.target.checked)}
-                                        className="mt-1 w-5 h-5"
-                                    />
-                                    <span className="text-sm text-amber-800">
-                                        <strong>Toestemming spraakverwerking</strong><br />
-                                        Ik geef toestemming dat stemopnames worden verwerkt door Deepgram (VS) voor automatische scoring.<br />
-                                        {settings.consentTimestamp && <span className="text-xs text-amber-600">Gegeven op: {new Date(settings.consentTimestamp).toLocaleString('nl-NL')}</span>}
-                                    </span>
+                                <label className="flex items-start gap-3 bg-amber-50 p-3 rounded-xl border border-amber-200 text-sm">
+                                    <input type="checkbox" checked={settings.deepgramConsent || false} onChange={e => updateSetting('deepgramConsent', e.target.checked)} className="mt-0.5 w-4 h-4" />
+                                    <span className="text-amber-800">Toestemming spraakverwerking (Deepgram)</span>
                                 </label>
                             </div>
+                        )}
 
-                            <div className="mt-4 text-center">
-                                <a href="/privacy.html" target="_blank" className="text-sm text-[#118AB2] underline">Bekijk privacybeleid</a>
+                        {/* Main Action Buttons */}
+                        <div className="px-6 mt-6 space-y-4 max-w-md mx-auto">
+                            <button onClick={() => setScreen('test')}
+                                className="w-full bg-gradient-to-r from-green-400 to-green-500 text-white font-black text-2xl py-5 px-8 rounded-2xl shadow-lg flex items-center justify-center gap-4 border-b-4 border-green-600 hover:scale-[1.02] transition-transform">
+                                <span className="bg-white/30 p-2 rounded-xl">📖</span>
+                                <span>Start Lezen</span>
+                            </button>
+
+                            <button onClick={() => setScreen('spelling')}
+                                className="w-full bg-gradient-to-r from-yellow-400 to-amber-400 text-amber-900 font-black text-2xl py-5 px-8 rounded-2xl shadow-lg flex items-center justify-center gap-4 border-b-4 border-amber-500 hover:scale-[1.02] transition-transform">
+                                <span className="bg-white/30 p-2 rounded-xl">✏️</span>
+                                <span>Spelling</span>
+                            </button>
+                        </div>
+
+                        {/* Progress Section */}
+                        <div className="px-6 mt-8 max-w-md mx-auto">
+                            <h2 className="text-lg font-bold text-gray-700 mb-3">Jouw Voortgang</h2>
+                            <div className="bg-white/90 backdrop-blur rounded-3xl shadow-xl p-5">
+                                <div className="flex items-center gap-4 mb-4">
+                                    <div className="flex -space-x-1">
+                                        {[1, 2, 3].map(i => (
+                                            <span key={i} className={`text-2xl ${i <= Math.min(level, 3) ? '' : 'opacity-30'}`}>⭐</span>
+                                        ))}
+                                    </div>
+                                    <div className="flex-1">
+                                        <div className="text-xs text-gray-500">Totaal Score:</div>
+                                        <div className="text-2xl font-black text-primary">{totalScore}</div>
+                                    </div>
+                                </div>
+                                <div className={`${levelColors[level - 1]} text-white text-center py-2 px-4 rounded-full font-bold text-sm mb-4`}>
+                                    Niveau {level}: {levelNames[level - 1]}
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="bg-indigo-50 rounded-xl p-3 text-center">
+                                        <div className="text-xs text-gray-500">Sessies</div>
+                                        <div className="text-xl font-black text-indigo-600">{sessionsCount}</div>
+                                    </div>
+                                    <div className="bg-amber-50 rounded-xl p-3 text-center">
+                                        <div className="text-xs text-gray-500">Beloningen</div>
+                                        <div className="text-xl font-black text-amber-600">{Math.floor(totalScore / 50)}</div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                    )}
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
-                        <div onClick={() => setScreen('test')} className="bg-white p-8 rounded-3xl shadow-xl border-l-8 border-[#06D6A0] cursor-pointer hover:scale-105 transition">
-                            <h2 className="text-3xl font-black text-slate-800 mb-2">📖 Technisch Lezen</h2>
-                            <p className="text-slate-500">Lees woorden zo snel mogelijk. 3 kaarten.</p>
-                        </div>
-                        <div onClick={() => setScreen('spelling')} className="bg-white p-8 rounded-3xl shadow-xl border-l-8 border-[#FFD166] cursor-pointer hover:scale-105 transition">
-                            <h2 className="text-3xl font-black text-slate-800 mb-2">📝 Spelling Dictee</h2>
-                            <p className="text-slate-500">Luister naar woorden en typ correct.</p>
+                        {/* Recent History */}
+                        {history.length > 0 && (
+                            <div className="px-6 mt-6 max-w-md mx-auto">
+                                <h3 className="text-md font-bold text-gray-600 mb-3">Recente Sessies</h3>
+                                <div className="space-y-2">
+                                    {history.slice(0, 3).map((s, i) => (
+                                        <div key={i} className="bg-white/80 backdrop-blur p-3 rounded-xl shadow-sm flex justify-between items-center">
+                                            <div className="flex items-center gap-3">
+                                                <span className="bg-green-100 p-2 rounded-lg">📖</span>
+                                                <div>
+                                                    <p className="font-bold text-gray-700 text-sm">Leessessie</p>
+                                                    <p className="text-xs text-gray-400">{new Date(s.created_at).toLocaleDateString('nl-NL')}</p>
+                                                </div>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-xl font-black text-green-500">{s.correct_words}</p>
+                                                <p className="text-xs text-gray-400">woorden</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Full History Section with Charts */}
+                        <div className="px-6 mt-8 max-w-2xl mx-auto">
+                            <HistorySection dmtHistory={history} userId={user.id} />
                         </div>
                     </div>
-                    {/* Enhanced History Section */}
-                    <HistorySection dmtHistory={history} userId={user.id} />
                 </div>
             );
         };
+
 
         const DMTTest = ({ setScreen }) => {
             const [phase, setPhase] = useState('intro');
@@ -1472,11 +1586,21 @@
 
 
         const App = () => {
-            const [user, setUser] = useState(null);
-            const [screen, setScreen] = useState('loading');
+            // DEMO MODE: Start directly without login
+            const demoUser = { id: 'demo', name: 'Demo Kind', email: 'demo@test.nl', school_group: 5 };
+            const [user, setUser] = useState(demoUser);
+            const [screen, setScreen] = useState('dashboard');
+
+            // Optional: try to get real user if server is available
             useEffect(() => {
-                getMe().then(u => { setUser(u); setScreen(u ? 'dashboard' : 'login'); }).catch(() => setScreen('login'));
+                getMe().then(u => {
+                    if (u) {
+                        setUser(u);
+                        setScreen('dashboard');
+                    }
+                }).catch(() => { /* Stay in demo mode */ });
             }, []);
+
             if (screen === 'loading') return <div className="h-screen flex items-center justify-center">Laden...</div>;
             if (screen === 'login') return <LoginScreen setScreen={setScreen} setUser={setUser} />;
             if (screen === 'register') return <RegisterScreen setScreen={setScreen} />;
